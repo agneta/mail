@@ -1,0 +1,29 @@
+{
+  "name": "@agneta/mail",
+  "version": "0.0.1",
+  "description": "Agneta Mail - Receive and send emails",
+  "main": "main",
+  "scripts": {},
+  "engines": {
+    "node": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agneta/mail.git"
+  },
+  "author": "Agneta Network Applications",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "bluebird": "^3.5.2",
+    "cheerio": "^1.0.0-rc.2",
+    "chokidar": "^2.0.4",
+    "lodash": "^4.17.11",
+    "mailparser": "^2.3.4",
+    "url-join": "^4.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^5.6.0",
+    "eslint-plugin-json": "^1.2.1",
+    "eslint-plugin-node": "^7.0.1"
+  }
+}
