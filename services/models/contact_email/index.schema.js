@@ -1,5 +1,5 @@
 module.exports = {
-  name: 'Contact_Email',
+  name: 'Mail_Box',
   base: 'PersistedModel',
   properties: {
     from: {
@@ -57,9 +57,9 @@ module.exports = {
   relations: {
     addresses: {
       type: 'hasMany',
-      model: 'Contact_Address',
+      model: 'Mail_Address',
       foreignKey: 'emailId',
-      through: 'Contact_Email_Address'
+      through: 'Mail_Box_Address'
     }
   },
   acls: [

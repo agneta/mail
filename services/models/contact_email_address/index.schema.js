@@ -1,5 +1,5 @@
 module.exports = {
-  name: 'Contact_Email_Address',
+  name: 'Mail_Box_Address',
   base: 'PersistedModel',
   properties: {
     type: {
@@ -21,12 +21,12 @@ module.exports = {
   relations: {
     email: {
       type: 'belongsTo',
-      model: 'Contact_Email',
+      model: 'Mail_Box',
       foreignKey: 'emailId'
     },
     address: {
       type: 'belongsTo',
-      model: 'Contact_Address',
+      model: 'Mail_Address',
       foreignKey: 'addressId'
     }
   },

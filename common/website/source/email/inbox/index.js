@@ -1,5 +1,5 @@
 agneta.directive('AgEmailInbox', function(
-  Contact_Email,
+  Mail_Box,
   $sce,
   $mdDialog,
   $location
@@ -9,7 +9,7 @@ agneta.directive('AgEmailInbox', function(
   var email = (vm.email = {});
 
   accounts.load = function() {
-    Contact_Email.inboxAccounts().$promise.then(function(result) {
+    Mail_Box.inboxAccounts().$promise.then(function(result) {
       //console.log(result);
       accounts.list = result.list;
     });
@@ -19,7 +19,7 @@ agneta.directive('AgEmailInbox', function(
     if (!accounts.selected) {
       return;
     }
-    Contact_Email.inboxList({
+    Mail_Box.inboxList({
       addressId: accounts.selected._id
     }).$promise.then(function(result) {
       if (!angular.equals(email.list, result.list)) {
@@ -46,7 +46,7 @@ agneta.directive('AgEmailInbox', function(
 
   email.open = function(item) {
     email.selected = item;
-    Contact_Email.inboxLoad({
+    Mail_Box.inboxLoad({
       emailId: item.id
     }).$promise.then(function(result) {
       result.html = $sce.trustAsHtml(result.html);

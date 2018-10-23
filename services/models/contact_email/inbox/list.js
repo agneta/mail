@@ -19,7 +19,7 @@ const _ = require('lodash');
 
 module.exports = function(Model, app) {
   Model.inboxList = function(addressId) {
-    return app.models.Contact_Email_Address.find({
+    return app.models.Mail_Box_Address.find({
       where: {
         type: {
           inq: ['to', 'cc']

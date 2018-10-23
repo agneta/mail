@@ -1,14 +1,11 @@
-
-module.exports = function(Model,app) {
-
+module.exports = function(Model, app) {
   Model.inboxAccounts = function() {
-
     var domain = app.web || app.client;
     domain = domain.project.config.domain.production;
 
-    return app.models.Contact_Address.getCollection()
+    return app.models.Mail_Address.getCollection()
       .find({
-        $text:{
+        $text: {
           $search: `"${domain}"`
         }
       })
@@ -23,20 +20,17 @@ module.exports = function(Model,app) {
       });
   };
 
-  Model.remoteMethod(
-    'inboxAccounts', {
-      description: 'Return inbox accounts',
-      accepts: [],
-      returns: {
-        arg: 'result',
-        type: 'object',
-        root: true
-      },
-      http: {
-        verb: 'get',
-        path: '/inbox-accounts'
-      }
+  Model.remoteMethod('inboxAccounts', {
+    description: 'Return inbox accounts',
+    accepts: [],
+    returns: {
+      arg: 'result',
+      type: 'object',
+      root: true
+    },
+    http: {
+      verb: 'get',
+      path: '/inbox-accounts'
     }
-  );
-
+  });
 };
