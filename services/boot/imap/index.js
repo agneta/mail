@@ -1,6 +1,6 @@
 'use strict';
 
-const IMAPServerModule = require('@agneta/mail-imap');
+const IMAPServerModule = require('@agneta/imap');
 const IMAPServer = IMAPServerModule.IMAPServer;
 
 const log = require('npmlog');
@@ -8,7 +8,7 @@ const config = require('wild-config');
 const packageData = require('../../../package.json');
 
 const ImapNotifier = require('./notifier');
-const Indexer = require('@agneta/mail-imap/lib/indexer/indexer');
+const Indexer = require('@agneta/imap/lib/indexer/indexer');
 const certs = require('./certs');
 
 const onFetch = require('./handlers/on-fetch');

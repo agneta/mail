@@ -14,7 +14,7 @@
   "author": "Agneta Network Applications",
   "license": "Apache-2.0",
   "dependencies": {
-    "@agneta/mail-imap": "^0.0.1",
+    "@agneta/imap": "^0.0.1",
     "bluebird": "^3.5.2",
     "cheerio": "^1.0.0-rc.2",
     "chokidar": "^2.0.4",
