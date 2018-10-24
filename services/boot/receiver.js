@@ -5,6 +5,7 @@ const path = require('path');
 const simpleParser = require('mailparser').simpleParser;
 const _ = require('lodash');
 const stream = require('stream');
+const jobName = 'emailReceive';
 
 module.exports = function(app) {
   var config = app.get('storage');
@@ -12,6 +13,15 @@ module.exports = function(app) {
   if (!config) {
     return;
   }
+
+  app.queue.add(jobName, null, {
+    jobId: 1,
+    repeat: {
+      every: INTERVAL
+    }
+  });
+
+  app.queue.process(jobName, rotateCheck);
 
   function rotateCheck() {
     return Promise.resolve()
@@ -205,14 +215,6 @@ module.exports = function(app) {
             concurrency: 4
           }
         );
-      })
-      .catch(function(err) {
-        console.error(err);
-      })
-      .then(function() {
-        return Promise.delay(INTERVAL).then(rotateCheck);
       });
   }
-
-  rotateCheck();
 };
