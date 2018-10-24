@@ -15,7 +15,7 @@
  *   limitations under the License.
  */
 module.exports = function(Model, app) {
-  Model.io = app.socket.namespace({
+  Model.io = app.socket.room({
     name: 'email',
     auth: {
       allow: ['administrator', 'editor']
