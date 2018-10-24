@@ -4,12 +4,12 @@ const IMAPServerModule = require('@agneta/imap');
 const IMAPServer = IMAPServerModule.IMAPServer;
 
 const log = require('npmlog');
-const config = require('wild-config');
+const config = require('./config');
 const packageData = require('../../../package.json');
 
-const ImapNotifier = require('./notifier');
+const ImapNotifier = require('@agneta/imap/lib/imap-notifier');
 const Indexer = require('@agneta/imap/lib/indexer/indexer');
-const certs = require('./certs');
+const Certs = require('./certs');
 
 const onFetch = require('./handlers/on-fetch');
 const onAuth = require('./handlers/on-auth');
@@ -47,6 +47,7 @@ let logger = {
 };
 
 let indexer;
+let certs;
 let notifier;
 
 let createInterface = (ifaceOptions, callback) => {
@@ -132,13 +133,15 @@ let createInterface = (ifaceOptions, callback) => {
   });
 };
 
-module.exports = done => {
+module.exports = (app, done) => {
   if (!config.imap.enabled) {
     return setImmediate(() => done(null, false));
   }
 
-  var options = {};
-
+  var options = {
+    redis: app.redis
+  };
+  certs = Certs(app);
   indexer = new Indexer(options);
   notifier = new ImapNotifier(options);
 
