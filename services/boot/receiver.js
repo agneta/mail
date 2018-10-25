@@ -102,7 +102,7 @@ module.exports = function(app) {
                   })
                 };
 
-                return app.models.Mail_Box.findOrCreate(
+                return app.models.Mail_Item.findOrCreate(
                   {
                     where: {
                       storageKey: storageKey
@@ -195,7 +195,7 @@ module.exports = function(app) {
                               date: email.date,
                               type: type
                             };
-                            return app.models.Mail_Box_Address.findOrCreate(
+                            return app.models.Mail_Item_Address.findOrCreate(
                               {
                                 where: props
                               },
@@ -209,6 +209,22 @@ module.exports = function(app) {
                     );
                   });
                 }
+              })
+              .then(function() {
+                let addresses = [];
+
+                emailParsed.to.map(checkAddresses);
+                emailParsed.css.map(checkAddresses);
+
+                function checkAddresses(address) {
+                  if (address.split('@')[1] == 'evolvingcycles.com') {
+                    addresses.push(address);
+                  }
+                }
+
+                return Promise.map(addresses, function() {
+                  //TODO: Add item to mailboxes
+                });
               });
           },
           {

@@ -3,11 +3,11 @@ module.exports = {
     dataSource: 'db',
     public: false
   },
-  Mail_Box: {
+  Mail_Item: {
     dataSource: 'db',
     public: true
   },
-  Mail_Box_Address: {
+  Mail_Item_Address: {
     dataSource: 'db',
     public: false
   }

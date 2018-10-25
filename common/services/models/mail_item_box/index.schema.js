@@ -1,40 +1,38 @@
 module.exports = {
-  name: 'Mail_Address',
+  name: 'Mail_Item_Box',
   base: 'PersistedModel',
   properties: {
-    name: {
+    itemlId: {
       type: 'string',
-      required: false
+      required: true
     },
-    email: {
+    mailboxId: {
       type: 'string',
       required: true
     }
   },
   validations: [],
-  mixins: {},
   relations: {
-    emails: {
-      type: 'hasMany',
+    item: {
+      type: 'belongsTo',
       model: 'Mail_Item',
-      foreignKey: 'addressId',
-      through: 'Mail_Item_Address'
+      foreignKey: 'itemlId'
+    },
+    mailbox: {
+      type: 'belongsTo',
+      model: 'Mail_Box',
+      foreignKey: 'mailboxId'
     }
   },
   indexes: {
-    search: {
+    unique: {
       keys: {
-        email: 'text'
-      }
-    },
-    email: {
-      keys: {
-        email: 1
+        mailboxId: 1,
+        itemlId: 1
       },
       options: {
         unique: true
       }
     }
-  },
-  methods: {}
+  }
 };
