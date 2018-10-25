@@ -1,3 +1,4 @@
+<%var data = get_data('email/inbox')%>
 <div flex="100"
   class="frame ag-margin md-padding"
   layout="column">
@@ -39,9 +40,9 @@
 
     <div class="box ag-margin"
       layout="column">
-      <%-await template('./address',page.address.from)%>
-      <%-await template('./address',page.address.to)%>
-      <%-await template('./address',page.address.cc)%>
+      <%-await template('./address',data.address.from)%>
+      <%-await template('./address',data.address.to)%>
+      <%-await template('./address',data.address.cc)%>
     </div>
     <div class="box email-content">
       <iframe srcdoc="{{ email.data.html}}"

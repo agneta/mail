@@ -1,7 +1,7 @@
 module.exports = {
   imap: {
     enabled: true,
-    port: 9993,
+    port: 993,
     host: '0.0.0.0',
     secure: true,
     maxMB: 25,

@@ -14,10 +14,11 @@
   "author": "Agneta Network Applications",
   "license": "Apache-2.0",
   "dependencies": {
-    "@agneta/imap": "^0.0.1",
+    "@agneta/imap": "^0.0.2",
     "bluebird": "^3.5.2",
     "cheerio": "^1.0.0-rc.2",
     "chokidar": "^2.0.4",
+    "isemail": "^3.2.0",
     "lodash": "^4.17.11",
     "mailparser": "^2.3.4",
     "npmlog": "^4.1.2",

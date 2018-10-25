@@ -10,6 +10,7 @@ const packageData = require('../../../package.json');
 const ImapNotifier = require('@agneta/imap/lib/imap-notifier');
 const Indexer = require('@agneta/imap/lib/indexer/indexer');
 const Certs = require('./certs');
+const UserCache = require('./user-cache');
 
 const onFetch = require('./handlers/on-fetch');
 const onAuth = require('./handlers/on-auth');
@@ -49,6 +50,8 @@ let logger = {
 let indexer;
 let certs;
 let notifier;
+let app;
+let userCache;
 
 let createInterface = (ifaceOptions, callback) => {
   // Setup server
@@ -101,7 +104,9 @@ let createInterface = (ifaceOptions, callback) => {
 
   // setup command handlers for the server instance
   var locals = {
-    server: server
+    server: server,
+    app: app,
+    userCache: userCache
   };
   server.onFetch = onFetch(locals);
   server.onAuth = onAuth(locals);
@@ -133,17 +138,21 @@ let createInterface = (ifaceOptions, callback) => {
   });
 };
 
-module.exports = (app, done) => {
+module.exports = (_app, done) => {
+  app = _app;
+
   if (!config.imap.enabled) {
     return setImmediate(() => done(null, false));
   }
 
   var options = {
-    redis: app.redis
+    redis: app.redis,
+    app: app
   };
   certs = Certs(app);
   indexer = new Indexer(options);
   notifier = new ImapNotifier(options);
+  userCache = UserCache(options);
 
   let ifaceOptions = [
     {
