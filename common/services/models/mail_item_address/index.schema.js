@@ -9,11 +9,11 @@ module.exports = {
       type: 'date'
     },
     emailId: {
-      type: 'string',
+      type: 'objectid',
       required: true
     },
     addressId: {
-      type: 'string',
+      type: 'objectid',
       required: true
     }
   },

@@ -2,12 +2,12 @@ module.exports = {
   name: 'Mail_Item_Box',
   base: 'PersistedModel',
   properties: {
-    itemlId: {
-      type: 'string',
+    itemId: {
+      type: 'objectid',
       required: true
     },
     mailboxId: {
-      type: 'string',
+      type: 'objectid',
       required: true
     }
   },
@@ -16,7 +16,7 @@ module.exports = {
     item: {
       type: 'belongsTo',
       model: 'Mail_Item',
-      foreignKey: 'itemlId'
+      foreignKey: 'itemId'
     },
     mailbox: {
       type: 'belongsTo',
@@ -28,7 +28,7 @@ module.exports = {
     unique: {
       keys: {
         mailboxId: 1,
-        itemlId: 1
+        itemId: 1
       },
       options: {
         unique: true

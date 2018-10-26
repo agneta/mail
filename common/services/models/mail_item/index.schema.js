@@ -41,7 +41,7 @@ module.exports = {
       required: false
     },
     mailboxId: {
-      type: 'string',
+      type: 'objectid',
       required: false
     }
   },

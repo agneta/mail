@@ -10,26 +10,24 @@ module.exports = {
     }
   },
   indexes: {
-    storageKey: {
+    unique: {
       keys: {
-        storageKey: 1
+        path: 1,
+        email: 1
       },
       options: {
-        unique: true,
-        sparse: true
+        unique: true
       }
     }
   },
   validations: [],
   mixins: {},
   relations: {
-    relations: {
-      items: {
-        type: 'hasMany',
-        model: 'Mail_Item',
-        foreignKey: 'itemId',
-        through: 'Mail_Item_Box'
-      }
+    items: {
+      type: 'hasMany',
+      model: 'Mail_Item',
+      foreignKey: 'itemId',
+      through: 'Mail_Item_Box'
     }
   },
   acls: [

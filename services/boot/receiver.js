@@ -9,7 +9,7 @@ const jobName = 'emailReceive';
 
 module.exports = function(app) {
   var config = app.get('storage');
-
+  var domain = app.web.project.config.domain.production;
   if (!config) {
     return;
   }
@@ -39,23 +39,15 @@ module.exports = function(app) {
           function(item) {
             var KeyParsed = path.parse(item.Key);
             var storageKey = KeyParsed.name;
-            var KeyNew = urljoin('processed', storageKey);
-            var email = null;
+            var mailItem = null;
             var emailParsed = null;
             var emailProps = null;
 
             return Promise.resolve()
               .then(function() {
-                return app.storage.moveObject({
-                  Bucket: config.buckets.email,
-                  From: item.Key,
-                  To: KeyNew
-                });
-              })
-              .then(function() {
                 return app.storage.getObjectStream({
                   Bucket: config.buckets.email,
-                  Key: KeyNew
+                  Key: item.Key
                 });
               })
               .then(function(stream) {
@@ -118,10 +110,10 @@ module.exports = function(app) {
                 }
                 return result[0].updateAttributes(emailProps);
               })
-              .then(function(_email) {
-                email = _email;
+              .then(function(_mailItem) {
+                mailItem = _mailItem;
 
-                if (email.infected) {
+                if (mailItem.infected) {
                   return;
                 }
 
@@ -135,7 +127,7 @@ module.exports = function(app) {
                     location: urljoin(
                       'email',
                       'attachments',
-                      email.id + '',
+                      mailItem.id + '',
                       attachment.filename
                     ),
                     mimetype: attachment.contentType,
@@ -191,8 +183,8 @@ module.exports = function(app) {
                           .then(function(address) {
                             let props = {
                               addressId: address.id,
-                              emailId: email.id,
-                              date: email.date,
+                              emailId: mailItem.id,
+                              date: mailItem.date,
                               type: type
                             };
                             return app.models.Mail_Item_Address.findOrCreate(
@@ -213,17 +205,48 @@ module.exports = function(app) {
               .then(function() {
                 let addresses = [];
 
-                emailParsed.to.map(checkAddresses);
-                emailParsed.css.map(checkAddresses);
+                checkAddresses(emailParsed.to);
+                checkAddresses(emailParsed.cc);
 
-                function checkAddresses(address) {
-                  if (address.split('@')[1] == 'evolvingcycles.com') {
-                    addresses.push(address);
+                function checkAddresses(data) {
+                  if (!data) {
+                    return;
                   }
+                  data.value.forEach(function(entry) {
+                    var address = entry.address;
+                    if (address.split('@')[1] == domain) {
+                      addresses.push(address);
+                    }
+                  });
                 }
 
-                return Promise.map(addresses, function() {
-                  //TODO: Add item to mailboxes
+                return Promise.map(addresses, function(email) {
+                  var props = {
+                    path: 'INBOX',
+                    email: email
+                  };
+
+                  return app.models.Mail_Box.findOrCreate(
+                    {
+                      where: props
+                    },
+                    props
+                  ).then(function(result) {
+                    var mailbox = result[0];
+                    return app.models.Mail_Item_Box.create({
+                      mailboxId: mailbox.id,
+                      itemId: mailItem.id
+                    });
+                  });
+                });
+              })
+              .then(function() {
+                var KeyNew = urljoin('processed', storageKey);
+
+                return app.storage.moveObject({
+                  Bucket: config.buckets.email,
+                  From: item.Key,
+                  To: KeyNew
                 });
               });
           },
@@ -231,6 +254,9 @@ module.exports = function(app) {
             concurrency: 4
           }
         );
+      })
+      .catch(function(err) {
+        console.error(err);
       });
   }
 };
