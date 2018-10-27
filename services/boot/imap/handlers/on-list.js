@@ -4,7 +4,7 @@ module.exports = function(locals) {
     query = query || {};
     let result = [];
 
-    Promise.resolve()
+    return Promise.resolve()
       .then(function() {
         return locals.app.models.Mail_Box._forEach({
           userId: session.user.id,

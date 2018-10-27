@@ -4,34 +4,44 @@ const _ = require('lodash');
 module.exports = function(locals) {
   return function(path, session, callback) {
     path = path.toLowerCase();
-    let uidList = [];
-    console.log(path);
-    Promise.resolve()
+    var pathParsed = path.split('/');
+    let mailAccountName = pathParsed.shift();
+    let mailAccountEmail = `${mailAccountName}@${locals.server.domain}`;
+    let mailboxPath = pathParsed.join('/');
+    return Promise.resolve()
       .then(function() {
-        return locals.app.models.Mail_Box._forEach({
-          userId: session.user.id,
+        return locals.app.models.Mail_Account.findOne({
           where: {
-            path: path
-          },
-          callback: function(data) {
+            email: mailAccountEmail
+          }
+        }).then(function(mailAccount) {
+          if (!mailAccount) {
+            return 'NONEXISTENT';
+          }
+
+          return locals.app.models.Mail_Box.findOne({
+            where: {
+              path: mailboxPath,
+              accountId: mailAccount.id
+            }
+          }).then(function(mailBox) {
+            if (!mailBox) {
+              return 'NONEXISTENT';
+            }
+
             return locals.app.models.Mail_Item_Box.find({
               where: {
-                mailboxId: data.mailBox.id
+                mailboxId: mailBox.id
               }
             }).then(function(result) {
-              var uids = _.map(result, 'itemId');
-              uidList = _.concat(uidList, uids);
-              _.uniq(uidList);
+              var uidList = _.map(result, 'itemId');
+              return {
+                id: mailBox.id,
+                uidList: uidList
+              };
             });
-          }
+          });
         });
-      })
-      .then(function() {
-        console.log(uidList);
-        return {
-          path: path,
-          uidList: uidList
-        };
       })
       .asCallback(callback);
   };

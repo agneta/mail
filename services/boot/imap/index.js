@@ -101,6 +101,7 @@ let createInterface = (ifaceOptions, callback) => {
 
   server.indexer = indexer;
   server.notifier = notifier;
+  server.domain = app.web.project.config.domain.production;
 
   // setup command handlers for the server instance
   var locals = {
