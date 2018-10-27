@@ -3,6 +3,14 @@ module.exports = {
     dataSource: 'db',
     public: false
   },
+  Mail_Account: {
+    dataSource: 'db',
+    public: true
+  },
+  Mail_Account_User: {
+    dataSource: 'db',
+    public: true
+  },
   Mail_Box: {
     dataSource: 'db',
     public: true

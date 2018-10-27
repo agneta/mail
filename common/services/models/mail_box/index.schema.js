@@ -3,17 +3,19 @@ module.exports = {
   base: 'PersistedModel',
   properties: {
     path: {
+      required: true,
       type: 'string'
     },
-    email: {
-      type: 'string'
+    accountId: {
+      required: true,
+      type: 'objectId'
     }
   },
   indexes: {
     unique: {
       keys: {
         path: 1,
-        email: 1
+        accountId: 1
       },
       options: {
         unique: true
@@ -23,6 +25,11 @@ module.exports = {
   validations: [],
   mixins: {},
   relations: {
+    account: {
+      type: 'belongsTo',
+      model: 'Mail_Account',
+      foreignKey: 'accountId'
+    },
     items: {
       type: 'hasMany',
       model: 'Mail_Item',

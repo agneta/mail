@@ -33,5 +33,6 @@ module.exports = function(Model, app) {
   require('./template/onEdit')(Model, app);
 
   require('./send')(Model, app);
+  require('./forEach')(Model, app);
   require('./html')(Model, app);
 };

@@ -172,11 +172,15 @@ module.exports = function(app) {
                             name: contactName
                           }
                         )
-                          .then(function(result) {
-                            if (result[1] && result[0].name && !contactName) {
-                              return result[0];
+                          .then(function(mailAddress) {
+                            if (
+                              mailAddress.created &&
+                              mailAddress.instance.name &&
+                              !contactName
+                            ) {
+                              return mailAddress.instance;
                             }
-                            return result[0].updateAttributes({
+                            return mailAddress.instance.updateAttributes({
                               name: contactName
                             });
                           })
@@ -221,23 +225,41 @@ module.exports = function(app) {
                 }
 
                 return Promise.map(addresses, function(email) {
-                  var props = {
-                    path: 'INBOX',
-                    email: email
-                  };
+                  return Promise.resolve()
+                    .then(function() {
+                      var props = {
+                        email: email
+                      };
+                      return app.models.Mail_Account.findOrCreate(
+                        {
+                          where: props
+                        },
+                        props
+                      );
+                    })
+                    .then(function(mailAccount) {
+                      var mailboxPath = 'inbox';
+                      if (mailItem.spam || mailItem.infected) {
+                        mailboxPath = 'junk';
+                      }
+                      var props = {
+                        path: mailboxPath,
+                        accountId: mailAccount.instance.id
+                      };
 
-                  return app.models.Mail_Box.findOrCreate(
-                    {
-                      where: props
-                    },
-                    props
-                  ).then(function(result) {
-                    var mailbox = result[0];
-                    return app.models.Mail_Item_Box.create({
-                      mailboxId: mailbox.id,
-                      itemId: mailItem.id
+                      return app.models.Mail_Box.findOrCreate(
+                        {
+                          where: props
+                        },
+                        props
+                      );
+                    })
+                    .then(function(mailbox) {
+                      return app.models.Mail_Item_Box.create({
+                        mailboxId: mailbox.instance.id,
+                        itemId: mailItem.id
+                      });
                     });
-                  });
                 });
               })
               .then(function() {
