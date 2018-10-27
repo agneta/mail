@@ -9,6 +9,7 @@ const packageData = require('../../../package.json');
 
 const ImapNotifier = require('@agneta/imap/lib/imap-notifier');
 const Indexer = require('@agneta/imap/lib/indexer/indexer');
+const Counters = require('@agneta/imap/lib/counters');
 const Certs = require('./certs');
 const UserCache = require('./user-cache');
 
@@ -52,6 +53,7 @@ let certs;
 let notifier;
 let app;
 let userCache;
+let counters;
 
 let createInterface = (ifaceOptions, callback) => {
   // Setup server
@@ -106,6 +108,7 @@ let createInterface = (ifaceOptions, callback) => {
   // setup command handlers for the server instance
   var locals = {
     server: server,
+    counters: counters,
     app: app,
     userCache: userCache
   };
@@ -150,6 +153,7 @@ module.exports = (_app, done) => {
     redis: app.redis,
     app: app
   };
+  counters = Counters(options.redis.publisher);
   certs = Certs(app);
   indexer = new Indexer(options);
   notifier = new ImapNotifier(options);

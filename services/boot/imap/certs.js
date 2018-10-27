@@ -4,7 +4,7 @@ const config = require('./config');
 const certs = new Map();
 const servers = [];
 
-module.exports = app => {
+module.exports = function(app) {
   certs.set('default', {
     key: app.httpServer.key,
     cert: app.httpServer.cert,

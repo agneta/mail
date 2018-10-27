@@ -60,21 +60,23 @@ module.exports = function(app) {
                 let to = emailParsed.to || {};
                 let cc = emailParsed.cc || {};
                 let replyTo = emailParsed['reply-to'] || {};
-
+                let headers = _.extend({}, emailParsed.headers);
+                _.omit(headers, [
+                  'from',
+                  'to',
+                  'cc',
+                  'reply-to',
+                  'return-path',
+                  'subject'
+                ]);
+                console.log(headers);
                 emailProps = {
                   from: from.value,
                   to: to.value,
                   cc: cc.value,
                   replyTo: replyTo.value,
                   storageKey: storageKey,
-                  headers: _.omit(emailParsed.headers, [
-                    'from',
-                    'to',
-                    'cc',
-                    'reply-to',
-                    'return-path',
-                    'subject'
-                  ]),
+                  headers: headers,
                   spam: emailParsed.headers['x-ses-spam-verdict'] == 'PASS',
                   infected:
                     emailParsed.headers['x-ses-virus-verdict'] == 'PASS',
@@ -120,18 +122,30 @@ module.exports = function(app) {
                 return Promise.map(emailParsed.attachments, function(
                   attachment
                 ) {
-                  var bufferStream = new stream.PassThrough();
-                  bufferStream.end(attachment.content);
+                  var location = urljoin(
+                    'email',
+                    'attachments',
+                    mailItem.id + '',
+                    attachment.filename
+                  );
+                  return app.models.Media_Private.__get({
+                    location: location,
+                    fields: {
+                      id: true
+                    }
+                  }).then(function(mediaItem) {
+                    if (mediaItem) {
+                      // Skip: Media exists
+                      return;
+                    }
+                    var bufferStream = new stream.PassThrough();
+                    bufferStream.end(attachment.content);
 
-                  return app.models.Media_Private.__sendFile({
-                    location: urljoin(
-                      'email',
-                      'attachments',
-                      mailItem.id + '',
-                      attachment.filename
-                    ),
-                    mimetype: attachment.contentType,
-                    stream: bufferStream
+                    return app.models.Media_Private.__sendFile({
+                      location: location,
+                      mimetype: attachment.contentType,
+                      stream: bufferStream
+                    });
                   });
                 });
               })
@@ -156,7 +170,7 @@ module.exports = function(app) {
                     return Promise.map(
                       contacts,
                       function(contact) {
-                        console.log(contact);
+                        //console.log(contact);
                         let contactName;
                         if (contact.name.length) {
                           contactName = contact.name;

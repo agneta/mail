@@ -33,12 +33,14 @@ module.exports = function(locals) {
               where: {
                 mailboxId: mailBox.id
               }
-            }).then(function(result) {
-              var uidList = _.map(result, 'itemId');
-              return {
-                id: mailBox.id,
+            }).then(function(mailItems) {
+              var uidList = _.map(mailItems, 'itemId');
+              var result = {
+                _id: mailBox.id,
                 uidList: uidList
               };
+              console.log(result);
+              return result;
             });
           });
         });
