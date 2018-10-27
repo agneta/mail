@@ -6,6 +6,7 @@ const simpleParser = require('mailparser').simpleParser;
 const _ = require('lodash');
 const stream = require('stream');
 const jobName = 'emailReceive';
+const ss = require('stream-string');
 
 module.exports = function(app) {
   var config = app.get('storage');
@@ -33,15 +34,17 @@ module.exports = function(app) {
       })
       .then(function(result) {
         //console.log(result);
+        let progress = 0;
 
         return Promise.map(
           result.Contents,
           function(item) {
-            var KeyParsed = path.parse(item.Key);
-            var storageKey = KeyParsed.name;
-            var mailItem = null;
-            var emailParsed = null;
-            var emailProps = null;
+            let KeyParsed = path.parse(item.Key);
+            let storageKey = KeyParsed.name;
+            let mailItem = null;
+            let emailParsed = null;
+            let emailProps = null;
+            let raw;
 
             return Promise.resolve()
               .then(function() {
@@ -51,7 +54,17 @@ module.exports = function(app) {
                 });
               })
               .then(function(stream) {
-                return simpleParser(stream);
+                return ss(stream);
+              })
+              .then(function(_raw) {
+                raw = _raw;
+                return app.models.Mail_Item.prepare({
+                  raw: raw
+                });
+              })
+              .then(function(_emailProps) {
+                emailProps = _emailProps;
+                return simpleParser(raw);
               })
               .then(function(_emailParsed) {
                 emailParsed = _emailParsed;
@@ -59,32 +72,39 @@ module.exports = function(app) {
                 let from = emailParsed.from || {};
                 let to = emailParsed.to || {};
                 let cc = emailParsed.cc || {};
+                let bcc = emailParsed.bcc || {};
                 let replyTo = emailParsed['reply-to'] || {};
-                let headers = _.extend({}, emailParsed.headers);
-                _.omit(headers, [
+
+                let headers = [...emailParsed.headers.entries()].reduce(
+                  (obj, [key, value]) => ((obj[key] = value), obj),
+                  {}
+                );
+                headers = _.omit(headers, [
                   'from',
                   'to',
                   'cc',
+                  'bcc',
                   'reply-to',
                   'return-path',
+                  'message-id',
                   'subject'
                 ]);
-                console.log(headers);
-                emailProps = {
+                _.extend(emailProps, {
                   from: from.value,
                   to: to.value,
                   cc: cc.value,
+                  bcc: bcc.value,
+                  modseq: 0,
                   replyTo: replyTo.value,
+                  references: emailParsed.references,
                   storageKey: storageKey,
                   headers: headers,
-                  spam: emailParsed.headers['x-ses-spam-verdict'] == 'PASS',
-                  infected:
-                    emailParsed.headers['x-ses-virus-verdict'] == 'PASS',
+                  spam: headers['x-ses-spam-verdict'] != 'PASS',
+                  infected: headers['x-ses-virus-verdict'] != 'PASS',
                   subject: emailParsed.subject,
-                  date: emailParsed.date,
+                  msgid: emailParsed.messageId,
                   html: emailParsed.html || emailParsed.textAsHtml,
                   text: emailParsed.text,
-                  type: 'received',
                   attachments: _.map(emailParsed.attachments, function(
                     attachment
                   ) {
@@ -94,7 +114,8 @@ module.exports = function(app) {
                       'size'
                     ]);
                   })
-                };
+                });
+                //console.log(emailProps);
 
                 return app.models.Mail_Item.findOrCreate(
                   {
@@ -122,7 +143,7 @@ module.exports = function(app) {
                 return Promise.map(emailParsed.attachments, function(
                   attachment
                 ) {
-                  var location = urljoin(
+                  let location = urljoin(
                     'email',
                     'attachments',
                     mailItem.id + '',
@@ -269,10 +290,16 @@ module.exports = function(app) {
                       );
                     })
                     .then(function(mailbox) {
-                      return app.models.Mail_Item_Box.create({
+                      let props = {
                         mailboxId: mailbox.instance.id,
                         itemId: mailItem.id
-                      });
+                      };
+                      return app.models.Mail_Item_Box.findOrCreate(
+                        {
+                          where: props
+                        },
+                        props
+                      );
                     });
                 });
               })
@@ -284,6 +311,12 @@ module.exports = function(app) {
                   From: item.Key,
                   To: KeyNew
                 });
+              })
+              .then(function() {
+                progress++;
+                console.log(
+                  `Processing emails: [${progress}/${result.Contents.length}]`
+                );
               });
           },
           {

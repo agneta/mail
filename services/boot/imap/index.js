@@ -2,7 +2,7 @@
 
 const IMAPServerModule = require('@agneta/imap');
 const IMAPServer = IMAPServerModule.IMAPServer;
-
+const Promise = require('bluebird');
 const log = require('npmlog');
 const config = require('./config');
 const packageData = require('../../../package.json');
@@ -154,6 +154,19 @@ module.exports = (_app, done) => {
     app: app
   };
   counters = Counters(options.redis.publisher);
+  counters.ttlcounterAsync = function() {
+    var args = Array.prototype.slice.call(arguments);
+    return new Promise(function(resolve, reject) {
+      args = [].concat(args);
+      args.push(function(err, result) {
+        if (err) {
+          return reject(err);
+        }
+        resolve(result);
+      });
+      counters.ttlcounter.apply(counters, args);
+    });
+  };
   certs = Certs(app);
   indexer = new Indexer(options);
   notifier = new ImapNotifier(options);

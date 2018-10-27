@@ -32,16 +32,16 @@ module.exports = {
     date: {
       type: 'date'
     },
-    type: {
-      type: 'string',
-      required: true
-    },
     status: {
       type: 'string',
       required: false
     },
     mailboxId: {
       type: 'objectid',
+      required: false
+    },
+    msgid: {
+      type: 'string',
       required: false
     }
   },
