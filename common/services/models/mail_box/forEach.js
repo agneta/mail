@@ -22,7 +22,7 @@ module.exports = function(Model, app) {
             mailAccount = _mailAccount;
             return app.models.Mail_Box.find({
               where: _.extend({}, options.where, {
-                accountId: mailAccount.id
+                mailAccountId: mailAccount.id
               })
             }).then(function(mailBoxes) {
               return Promise.map(mailBoxes, function(mailbox) {

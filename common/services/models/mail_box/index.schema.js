@@ -15,10 +15,6 @@ module.exports = {
       type: 'number',
       default: 0
     },
-    accountId: {
-      required: true,
-      type: 'objectId'
-    },
     modifyIndex: {
       required: true,
       type: 'number',
@@ -29,7 +25,7 @@ module.exports = {
     unique: {
       keys: {
         path: 1,
-        accountId: 1
+        mailAccountId: 1
       },
       options: {
         unique: true

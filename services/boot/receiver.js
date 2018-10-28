@@ -55,33 +55,74 @@ module.exports = function(app) {
               })
               .then(function(_headObject) {
                 headObject = _headObject;
-                return app.storage.getObjectStream({
+
+                if (headObject.ContentType == 'application/x-directory') {
+                  return Promise.reject({
+                    skip: true,
+                    message: 'it is a directory'
+                  });
+                }
+                //console.log(headObject);
+
+                var objectStream = app.storage.getObjectStream({
                   Bucket: config.buckets.email,
                   Key: item.Key
                 });
-              })
-              .then(function(stream) {
-                return simpleParser(stream);
+                return simpleParser(objectStream);
               })
               .then(function(_emailParsed) {
                 emailParsed = _emailParsed;
-                var receivedEntry = emailParsed.headers.received[0];
-                var email = receivedEntry.match(/(?<= for )(.*?)(?=; )/g)[0];
+                emailParsed.headers = [...emailParsed.headers.entries()].reduce(
+                  (obj, [key, value]) => ((obj[key] = value), obj),
+                  {}
+                );
+
+                emailProps = {
+                  spam: emailParsed.headers['x-ses-spam-verdict'] != 'PASS',
+                  infected: emailParsed.headers['x-ses-virus-verdict'] != 'PASS'
+                };
+
+                var receivedEntry = emailParsed.headers['received'];
+                if (!receivedEntry) {
+                  console.error(emailParsed.headers);
+
+                  return Promise.reject({
+                    skip: true,
+                    message: 'No received header'
+                  });
+                }
+                if (_.isArray(receivedEntry)) {
+                  receivedEntry = receivedEntry[0];
+                }
+
+                var match = receivedEntry.match(/(?<= for )(.*?)(?=; )/g);
+
+                if (!match) {
+                  console.error(emailParsed.headers);
+
+                  return Promise.reject({
+                    skip: true,
+                    message:
+                      'No email match for receive header: ' + receivedEntry
+                  });
+                }
+
+                var email = match[0];
                 if (!email) {
-                  return Promise.reject(
-                    new Error(
+                  return Promise.reject({
+                    skip: true,
+                    message:
                       'Could not find email from received header: ' +
-                        receivedEntry
-                    )
-                  );
+                      receivedEntry
+                  });
                 }
 
                 email = email.toLowerCase();
                 email = _.trim(email);
 
-                let emailParsed = email.split('@');
-                let emailName = emailParsed[0];
-                let emailHost = emailParsed[1];
+                let emailParts = email.split('@');
+                let emailName = emailParts[0];
+                let emailHost = emailParts[1];
 
                 if (emailHost != domain) {
                   return Promise.reject(
@@ -106,12 +147,12 @@ module.exports = function(app) {
               })
               .then(function(mailAccount) {
                 var mailboxPath = 'inbox';
-                if (mailItem.spam || mailItem.infected) {
+                if (emailProps.spam || emailProps.infected) {
                   mailboxPath = 'junk';
                 }
                 var props = {
                   path: `${mailAccount.name}/${mailboxPath}`,
-                  accountId: mailAccount.instance.id
+                  mailAccountId: mailAccount.id
                 };
 
                 return app.models.Mail_Box.findOrCreate(
@@ -121,9 +162,10 @@ module.exports = function(app) {
                   props
                 );
               })
-              .then(function(_mailbox) {
-                mailbox = _mailbox;
+              .then(function(result) {
+                mailbox = result.instance;
                 mailbox.uidNext++;
+                //console.log(mailbox);
 
                 let from = emailParsed.from || {};
                 let to = emailParsed.to || {};
@@ -131,12 +173,7 @@ module.exports = function(app) {
                 let bcc = emailParsed.bcc || {};
                 let replyTo = emailParsed['reply-to'] || {};
 
-                let headers = [...emailParsed.headers.entries()].reduce(
-                  (obj, [key, value]) => ((obj[key] = value), obj),
-                  {}
-                );
-
-                emailProps = {
+                _.extend(emailProps, {
                   from: from.value,
                   to: to.value,
                   cc: cc.value,
@@ -144,9 +181,7 @@ module.exports = function(app) {
                   replyTo: replyTo.value,
                   references: emailParsed.references,
                   storageKey: storageKey,
-                  headers: headers,
-                  spam: headers['x-ses-spam-verdict'] != 'PASS',
-                  infected: headers['x-ses-virus-verdict'] != 'PASS',
+                  headers: emailParsed.headers,
                   subject: emailParsed.subject,
                   messageId: emailParsed.messageId,
                   date: emailParsed.date,
@@ -167,25 +202,16 @@ module.exports = function(app) {
                   mailAccountId: mailbox.mailAccountId,
                   uid: mailbox.uidNext,
                   modseq: mailbox.modifyIndex + 1
-                };
+                });
 
                 //console.log(emailProps);
 
-                return app.models.Mail_Item.findOrCreate(
+                return app.models.Mail_Item.upsertWithWhere(
                   {
-                    where: {
-                      storageKey: storageKey
-                    }
+                    storageKey: storageKey
                   },
                   emailProps
                 );
-              })
-              .then(function(result) {
-                if (result[1]) {
-                  //created
-                  return result[0];
-                }
-                return result[0].updateAttributes(emailProps);
               })
               .then(function(_mailItem) {
                 mailItem = _mailItem;
@@ -280,6 +306,18 @@ module.exports = function(app) {
                   });
                 }
               })
+              .catch(function(err) {
+                if (err.skip) {
+                  var KeyNew = urljoin('skipped', storageKey);
+
+                  return app.storage.moveObject({
+                    Bucket: config.buckets.email,
+                    From: item.Key,
+                    To: KeyNew
+                  });
+                }
+                return Promise.reject(err);
+              })
               .then(function() {
                 return mailbox.save();
               })
@@ -300,7 +338,7 @@ module.exports = function(app) {
               });
           },
           {
-            concurrency: 4
+            concurrency: 1
           }
         );
       })

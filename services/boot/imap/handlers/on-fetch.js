@@ -63,6 +63,7 @@ module.exports = function(locals) {
 
             let fields = {
               id: true,
+              uid: true,
               modseq: true,
               date: true,
               flags: true,
@@ -74,7 +75,7 @@ module.exports = function(locals) {
               fields.text = true;
             }
             //console.log(options, options.messages.length);
-            return Promise.map(
+            return Promise.mapSeries(
               options.messages,
               function(messageId) {
                 let values = {
@@ -102,7 +103,7 @@ module.exports = function(locals) {
                       );
 
                       let messageData = {
-                        uid: message.id,
+                        uid: message.uid,
                         idate: message.date,
                         mimeTree: mimeTree
                       };
@@ -130,18 +131,18 @@ module.exports = function(locals) {
                           }
                         );
                         let stream = imapHandler.compileStream(
-                          session.formatResponse('FETCH', messageId, {
+                          session.formatResponse('FETCH', message.uid, {
                             query: options.query,
                             values: values
                           })
                         );
 
-                        let description = util.format(
-                          '* FETCH #%s id=%s',
+                        stream.description = util.format(
+                          '* FETCH #%s uid=%s size=%sB ',
                           ++rowCount,
-                          message.id
+                          message.uid,
+                          message.size
                         );
-                        stream.description = description;
 
                         stream.once('error', err => {
                           err.processed = true;
@@ -197,7 +198,7 @@ module.exports = function(locals) {
                                   {
                                     command: 'FETCH',
                                     ignore: session.id,
-                                    uid: message.id,
+                                    uid: message.uid,
                                     flags: message.flags,
                                     message: message.id,
                                     unseenChange: true

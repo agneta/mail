@@ -38,14 +38,18 @@ module.exports = {
     },
     mailboxId: {
       type: 'objectid',
-      required: false
+      required: true
     },
     mailAccountId: {
       type: 'objectid',
-      required: false
+      required: true
     },
     messageId: {
       type: 'string',
+      required: false
+    },
+    uid: {
+      type: 'number',
       required: false
     }
   },
@@ -55,8 +59,16 @@ module.exports = {
         storageKey: 1
       },
       options: {
-        unique: true,
-        sparse: true
+        unique: true
+      }
+    },
+    uid: {
+      keys: {
+        uid: 1,
+        mailboxId: 1
+      },
+      options: {
+        unique: true
       }
     }
   },

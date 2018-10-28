@@ -29,12 +29,15 @@ module.exports = function(locals) {
               return 'NONEXISTENT';
             }
 
-            return locals.app.models.Mail_Item_Box.find({
+            return locals.app.models.Mail_Item.find({
               where: {
                 mailboxId: mailbox.id
+              },
+              fields: {
+                uid: true
               }
             }).then(function(mailItems) {
-              var uidList = _.map(mailItems, 'itemId');
+              var uidList = _.map(mailItems, 'uid');
               var result = {
                 _id: mailbox.id,
                 uidList: uidList
