@@ -40,7 +40,7 @@ let logger = {
   },
   debug(...args) {
     args.shift();
-    log.silly('IMAP', ...args);
+    log.info('IMAP', ...args);
   },
   error(...args) {
     args.shift();

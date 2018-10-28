@@ -6,9 +6,23 @@ module.exports = {
       required: true,
       type: 'string'
     },
+    mailAccountId: {
+      required: true,
+      type: 'objectId'
+    },
+    uidNext: {
+      required: true,
+      type: 'number',
+      default: 0
+    },
     accountId: {
       required: true,
       type: 'objectId'
+    },
+    modifyIndex: {
+      required: true,
+      type: 'number',
+      default: 0
     }
   },
   indexes: {
@@ -28,13 +42,12 @@ module.exports = {
     account: {
       type: 'belongsTo',
       model: 'Mail_Account',
-      foreignKey: 'accountId'
+      foreignKey: 'mailAccountId'
     },
     items: {
       type: 'hasMany',
       model: 'Mail_Item',
-      foreignKey: 'itemId',
-      through: 'Mail_Item_Box'
+      foreignKey: 'mailboxId'
     }
   },
   acls: [

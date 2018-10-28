@@ -5,11 +5,14 @@ const IMAPServerModule = require('@agneta/imap');
 const imapHandler = IMAPServerModule.imapHandler;
 const util = require('util');
 const Promise = require('bluebird');
+const _ = require('lodash');
 const LimitedFetch = require('../limited-fetch');
+const MailComposer = require('nodemailer/lib/mail-composer');
 
 module.exports = function(locals) {
   return function(mailbox, options, session, callback) {
     let limit;
+    let mailboxData;
     locals.server.logger.debug(
       {
         tnx: 'fetch',
@@ -24,159 +27,218 @@ module.exports = function(locals) {
       .then(function() {
         return locals.app.models.Mail_Box.findById(mailbox);
       })
-      .then(function(mailboxData) {
+      .then(function(_mailboxData) {
+        mailboxData = _mailboxData;
         if (!mailboxData) {
           return 'NONEXISTENT';
         }
 
-        return locals.userCache.get(
-          session.user.id,
-          'imapMaxDownload',
-          (config.imap.maxDownloadMB || 10) * 1024 * 1024
-        );
-      })
-      .then(function(_limit) {
-        limit = _limit;
-        return locals.counters.ttlcounterAsync(
-          'idw:' + session.user.id,
-          0,
-          limit,
-          false
-        );
-      })
-      .then(function(res) {
-        if (!res.success) {
-          let err = new Error(
-            'Download was rate limited. Check again in ' + res.ttl + ' seconds'
-          );
-          err.response = 'NO';
-          return Promise.reject(err);
-        }
-
-        let rowCount = 0;
-
-        let fields = {
-          uid: true,
-          modseq: true,
-          idate: true,
-          flags: true,
-          envelope: true,
-          bodystructure: true,
-          size: true
-        };
-
-        if (!options.metadataOnly) {
-          fields.html = true;
-          fields.text = true;
-          fields.attachments = true;
-        }
-        console.log(options);
-        return Promise.map(options.messages, function(messageId) {
-          return locals.app.models.Mail_Item.findById(messageId, {
-            fields: fields
-          }).then(function(message) {
-            if (!message) {
-              return;
+        return locals.userCache
+          .get(
+            session.user.id,
+            'imapMaxDownload',
+            (config.imap.maxDownloadMB || 10) * 1024 * 1024
+          )
+          .then(function(_limit) {
+            limit = _limit;
+            return locals.counters.ttlcounterAsync(
+              'idw:' + session.user.id,
+              0,
+              limit,
+              false
+            );
+          })
+          .then(function(res) {
+            if (!res.success) {
+              let err = new Error(
+                'Download was rate limited. Check again in ' +
+                  res.ttl +
+                  ' seconds'
+              );
+              err.response = 'NO';
+              return Promise.reject(err);
             }
 
-            console.log(message);
+            let rowCount = 0;
 
-            return new Promise(function(resolve, reject) {
-              let markAsSeen =
-                options.markAsSeen && !message.flags.includes('\\Seen');
-              if (markAsSeen) {
-                message.flags.unshift('\\Seen');
-              }
+            let fields = {
+              id: true,
+              modseq: true,
+              date: true,
+              flags: true,
+              headers: true
+            };
 
-              let stream = imapHandler.compileStream(
-                session.formatResponse('FETCH', message.uid, {
-                  query: options.query,
-                  values: session.getQueryResponse(options.query, message, {
-                    logger: locals.server.logger,
-                    fetchOptions: {},
-                    attachmentStorage: locals.attachmentStorage,
-                    acceptUTF8Enabled: session.isUTF8Enabled()
-                  })
+            if (!options.metadataOnly) {
+              fields.html = true;
+              fields.text = true;
+            }
+            //console.log(options, options.messages.length);
+            return Promise.map(
+              options.messages,
+              function(messageId) {
+                let values = {
+                  pending: messageId
+                };
+
+                return locals.app.models.Mail_Item.findById(messageId, {
+                  fields: fields
                 })
-              );
+                  .then(function(message) {
+                    if (!message) {
+                      return;
+                    }
+                    var mailOptions = _.pick(message.__data, [
+                      'html',
+                      'text',
+                      'headers'
+                    ]);
 
-              stream.description = util.format(
-                '* FETCH #%s uid=%s size=%sB ',
-                ++rowCount,
-                message.uid,
-                message.size
-              );
+                    //console.log(mailOptions);
 
-              stream.once('error', err => {
-                err.processed = true;
-                locals.server.logger.error(
-                  {
-                    err,
-                    tnx: 'fetch',
-                    cid: session.id
-                  },
-                  '[%s] FETCHFAIL %s. %s',
-                  session.id,
-                  message._id,
-                  err.message
-                );
+                    return composeMail(mailOptions).then(function(mailRaw) {
+                      let mimeTree = locals.app.models.Mail_Item.indexer.parseMimeTree(
+                        mailRaw
+                      );
 
-                session.socket.end('\n* BYE Internal Server Error\n');
-                reject(err);
-              });
+                      let messageData = {
+                        uid: message.id,
+                        idate: message.date,
+                        mimeTree: mimeTree
+                      };
 
-              let limiter = new LimitedFetch({
-                key: 'idw:' + session.user.id,
-                ttlcounter: locals.counters.ttlcounterAsync,
-                maxBytes: limit
-              });
-              stream.pipe(limiter);
+                      _.extend(
+                        messageData,
+                        _.pick(message.__data, ['modseq', 'flags'])
+                      );
 
-              // send formatted response to socket
-              session.writeStream.write(limiter, () => {
-                if (!markAsSeen) {
-                  return resolve();
-                }
+                      //console.log(messageData);
 
-                locals.server.logger.debug(
-                  {
-                    tnx: 'flags',
-                    cid: session.id
-                  },
-                  '[%s] UPDATE FLAGS for "%s"',
-                  session.id,
-                  message.uid
-                );
+                      return new Promise(function(resolve, reject) {
+                        let markAsSeen =
+                          options.markAsSeen &&
+                          !message.flags.includes('\\Seen');
 
-                return message
-                  .updateAttributes({
-                    flags: message.flags.concat(['\\Seen'])
+                        values = session.getQueryResponse(
+                          options.query,
+                          messageData,
+                          {
+                            logger: locals.server.logger,
+                            fetchOptions: {},
+                            //attachmentStorage: locals.attachmentStorage,
+                            acceptUTF8Enabled: session.isUTF8Enabled()
+                          }
+                        );
+                        let stream = imapHandler.compileStream(
+                          session.formatResponse('FETCH', messageId, {
+                            query: options.query,
+                            values: values
+                          })
+                        );
+
+                        let description = util.format(
+                          '* FETCH #%s id=%s',
+                          ++rowCount,
+                          message.id
+                        );
+                        stream.description = description;
+
+                        stream.once('error', err => {
+                          err.processed = true;
+                          locals.server.logger.error(
+                            {
+                              err,
+                              tnx: 'fetch',
+                              cid: session.id
+                            },
+                            '[%s] FETCHFAIL %s. %s',
+                            session.id,
+                            messageData.uid,
+                            err.message
+                          );
+
+                          session.socket.end('\n* BYE Internal Server Error\n');
+                          reject(err);
+                        });
+
+                        let limiter = new LimitedFetch({
+                          key: 'idw:' + session.user.id,
+                          ttlcounter: locals.counters.ttlcounter,
+                          maxBytes: limit
+                        });
+                        stream.pipe(limiter);
+
+                        // send formatted response to socket
+                        session.writeStream.write(limiter, () => {
+                          if (!markAsSeen) {
+                            return resolve();
+                          }
+
+                          locals.server.logger.debug(
+                            {
+                              tnx: 'flags',
+                              cid: session.id
+                            },
+                            '[%s] UPDATE FLAGS for "%s"',
+                            session.id,
+                            message.uid
+                          );
+
+                          var flags = message.flags.concat(['\\Seen']);
+                          flags = _.uniq(flags);
+                          return message
+                            .updateAttributes({
+                              flags: flags
+                            })
+                            .then(function() {
+                              return locals.server.notifier.addEntries(
+                                mailboxData,
+                                [
+                                  {
+                                    command: 'FETCH',
+                                    ignore: session.id,
+                                    uid: message.id,
+                                    flags: message.flags,
+                                    message: message.id,
+                                    unseenChange: true
+                                  }
+                                ]
+                              );
+                            })
+                            .then(function() {
+                              return locals.server.notifier.fire(
+                                session.user.id
+                              );
+                            })
+                            .then(resolve)
+                            .catch(reject);
+                        });
+                      });
+                    });
                   })
-                  .then(resolve)
-                  .catch(reject);
-
-                /*
-                            return locals.server.notifier
-                              .addEntries(mailboxData, [
-                                {
-                                  command: 'FETCH',
-                                  ignore: session.id,
-                                  uid: message.uid,
-                                  flags: message.flags,
-                                  message: message._id,
-                                  unseenChange: true
-                                }
-                              ])
-                              .then(function() {
-                                return locals.server.notifier.fire(
-                                  session.user.id
-                                );
-                              });*/
-              });
+                  .then(function() {
+                    return values;
+                  });
+              },
+              {
+                concurrency: 1
+              }
+            ).then(function() {
+              return true;
             });
           });
-        });
       })
       .asCallback(callback);
   };
 };
+
+function composeMail(mailOptions) {
+  return new Promise(function(resolve, reject) {
+    new MailComposer(mailOptions).compile().build(function(err, result) {
+      if (err) {
+        return reject(err);
+      }
+      resolve(result);
+    });
+  });
+}

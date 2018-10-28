@@ -17,9 +17,13 @@ class LimitedFetch extends Transform {
     if (!this.options.maxBytes) {
       return done();
     }
-    this.options
-      .ttlcounter(this.options.key, this.bytes, this.options.maxBytes, false)
-      .asCallback(done);
+    this.options.ttlcounter(
+      this.options.key,
+      this.bytes,
+      this.options.maxBytes,
+      false,
+      () => done()
+    );
   }
 }
 

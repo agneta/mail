@@ -24,19 +24,19 @@ module.exports = function(locals) {
               path: mailboxPath,
               accountId: mailAccount.id
             }
-          }).then(function(mailBox) {
-            if (!mailBox) {
+          }).then(function(mailbox) {
+            if (!mailbox) {
               return 'NONEXISTENT';
             }
 
             return locals.app.models.Mail_Item_Box.find({
               where: {
-                mailboxId: mailBox.id
+                mailboxId: mailbox.id
               }
             }).then(function(mailItems) {
               var uidList = _.map(mailItems, 'itemId');
               var result = {
-                _id: mailBox.id,
+                _id: mailbox.id,
                 uidList: uidList
               };
               console.log(result);

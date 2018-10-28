@@ -10,9 +10,7 @@ module.exports = function(locals) {
           userId: session.user.id,
           where: query.wehere,
           callback: function(data) {
-            var username = data.mailAccount.email.split('@')[0];
-            data.mailBox.path = `${username}/${data.mailBox.path}`;
-            result.push(data.mailBox);
+            result.push(data.mailbox);
           }
         });
       })

@@ -5,7 +5,7 @@
   "main": "main",
   "scripts": {},
   "engines": {
-    "node": ">=8.0.0"
+    "node": ">=8.10.0"
   },
   "repository": {
     "type": "git",
@@ -21,6 +21,7 @@
     "isemail": "^3.2.0",
     "lodash": "^4.17.11",
     "mailparser": "^2.3.4",
+    "nodemailer": "^4.6.8",
     "npmlog": "^4.1.2",
     "stream-string": "^2.0.1",
     "url-join": "^4.0.0",

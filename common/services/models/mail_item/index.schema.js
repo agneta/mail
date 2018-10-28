@@ -40,7 +40,11 @@ module.exports = {
       type: 'objectid',
       required: false
     },
-    msgid: {
+    mailAccountId: {
+      type: 'objectid',
+      required: false
+    },
+    messageId: {
       type: 'string',
       required: false
     }
@@ -65,11 +69,15 @@ module.exports = {
       foreignKey: 'emailId',
       through: 'Mail_Item_Address'
     },
-    mailboxes: {
-      type: 'hasMany',
+    mailAccount: {
+      type: 'belongsTo',
+      model: 'Mail_Account',
+      foreignKey: 'mailAccountId'
+    },
+    mailbox: {
+      type: 'belongsTo',
       model: 'Mail_Box',
-      foreignKey: 'mailboxId',
-      through: 'Mail_Item_Box'
+      foreignKey: 'mailboxId'
     }
   },
   acls: [

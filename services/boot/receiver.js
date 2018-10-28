@@ -6,7 +6,6 @@ const simpleParser = require('mailparser').simpleParser;
 const _ = require('lodash');
 const stream = require('stream');
 const jobName = 'emailReceive';
-const ss = require('stream-string');
 
 module.exports = function(app) {
   var config = app.get('storage');
@@ -44,30 +43,87 @@ module.exports = function(app) {
             let mailItem = null;
             let emailParsed = null;
             let emailProps = null;
-            let raw;
+            let headObject;
+            let mailbox;
 
             return Promise.resolve()
               .then(function() {
+                return app.storage.headObject({
+                  Bucket: config.buckets.email,
+                  Key: item.Key
+                });
+              })
+              .then(function(_headObject) {
+                headObject = _headObject;
                 return app.storage.getObjectStream({
                   Bucket: config.buckets.email,
                   Key: item.Key
                 });
               })
               .then(function(stream) {
-                return ss(stream);
-              })
-              .then(function(_raw) {
-                raw = _raw;
-                return app.models.Mail_Item.prepare({
-                  raw: raw
-                });
-              })
-              .then(function(_emailProps) {
-                emailProps = _emailProps;
-                return simpleParser(raw);
+                return simpleParser(stream);
               })
               .then(function(_emailParsed) {
                 emailParsed = _emailParsed;
+                var receivedEntry = emailParsed.headers.received[0];
+                var email = receivedEntry.match(/(?<= for )(.*?)(?=; )/g)[0];
+                if (!email) {
+                  return Promise.reject(
+                    new Error(
+                      'Could not find email from received header: ' +
+                        receivedEntry
+                    )
+                  );
+                }
+
+                email = email.toLowerCase();
+                email = _.trim(email);
+
+                let emailParsed = email.split('@');
+                let emailName = emailParsed[0];
+                let emailHost = emailParsed[1];
+
+                if (emailHost != domain) {
+                  return Promise.reject(
+                    new Error(
+                      `Email host receipient did not match the domain: ${domain}`
+                    )
+                  );
+                }
+
+                var props = {
+                  email: email
+                };
+                return app.models.Mail_Account.upsertWithWhere(
+                  props,
+                  _.extend(
+                    {
+                      name: emailName
+                    },
+                    props
+                  )
+                );
+              })
+              .then(function(mailAccount) {
+                var mailboxPath = 'inbox';
+                if (mailItem.spam || mailItem.infected) {
+                  mailboxPath = 'junk';
+                }
+                var props = {
+                  path: `${mailAccount.name}/${mailboxPath}`,
+                  accountId: mailAccount.instance.id
+                };
+
+                return app.models.Mail_Box.findOrCreate(
+                  {
+                    where: props
+                  },
+                  props
+                );
+              })
+              .then(function(_mailbox) {
+                mailbox = _mailbox;
+                mailbox.uidNext++;
 
                 let from = emailParsed.from || {};
                 let to = emailParsed.to || {};
@@ -79,22 +135,12 @@ module.exports = function(app) {
                   (obj, [key, value]) => ((obj[key] = value), obj),
                   {}
                 );
-                headers = _.omit(headers, [
-                  'from',
-                  'to',
-                  'cc',
-                  'bcc',
-                  'reply-to',
-                  'return-path',
-                  'message-id',
-                  'subject'
-                ]);
-                _.extend(emailProps, {
+
+                emailProps = {
                   from: from.value,
                   to: to.value,
                   cc: cc.value,
                   bcc: bcc.value,
-                  modseq: 0,
                   replyTo: replyTo.value,
                   references: emailParsed.references,
                   storageKey: storageKey,
@@ -102,9 +148,12 @@ module.exports = function(app) {
                   spam: headers['x-ses-spam-verdict'] != 'PASS',
                   infected: headers['x-ses-virus-verdict'] != 'PASS',
                   subject: emailParsed.subject,
-                  msgid: emailParsed.messageId,
+                  messageId: emailParsed.messageId,
+                  date: emailParsed.date,
                   html: emailParsed.html || emailParsed.textAsHtml,
                   text: emailParsed.text,
+                  flags: [],
+                  size: headObject.ContentLength,
                   attachments: _.map(emailParsed.attachments, function(
                     attachment
                   ) {
@@ -113,8 +162,13 @@ module.exports = function(app) {
                       'contentType',
                       'size'
                     ]);
-                  })
-                });
+                  }),
+                  mailboxId: mailbox.id,
+                  mailAccountId: mailbox.mailAccountId,
+                  uid: mailbox.uidNext,
+                  modseq: mailbox.modifyIndex + 1
+                };
+
                 //console.log(emailProps);
 
                 return app.models.Mail_Item.findOrCreate(
@@ -196,43 +250,28 @@ module.exports = function(app) {
                         if (contact.name.length) {
                           contactName = contact.name;
                         }
-                        return app.models.Mail_Address.findOrCreate(
+                        return app.models.Mail_Address.upsertWithWhere(
                           {
-                            where: {
-                              email: contact.address
-                            }
+                            email: contact.address
                           },
                           {
                             email: contact.address,
                             name: contactName
                           }
-                        )
-                          .then(function(mailAddress) {
-                            if (
-                              mailAddress.created &&
-                              mailAddress.instance.name &&
-                              !contactName
-                            ) {
-                              return mailAddress.instance;
-                            }
-                            return mailAddress.instance.updateAttributes({
-                              name: contactName
-                            });
-                          })
-                          .then(function(address) {
-                            let props = {
-                              addressId: address.id,
-                              emailId: mailItem.id,
-                              date: mailItem.date,
-                              type: type
-                            };
-                            return app.models.Mail_Item_Address.findOrCreate(
-                              {
-                                where: props
-                              },
-                              props
-                            );
-                          });
+                        ).then(function(address) {
+                          let props = {
+                            addressId: address.id,
+                            emailId: mailItem.id,
+                            date: mailItem.date,
+                            type: type
+                          };
+                          return app.models.Mail_Item_Address.findOrCreate(
+                            {
+                              where: props
+                            },
+                            props
+                          );
+                        });
                       },
                       {
                         concurrency: 1
@@ -242,66 +281,7 @@ module.exports = function(app) {
                 }
               })
               .then(function() {
-                let addresses = [];
-
-                checkAddresses(emailParsed.to);
-                checkAddresses(emailParsed.cc);
-
-                function checkAddresses(data) {
-                  if (!data) {
-                    return;
-                  }
-                  data.value.forEach(function(entry) {
-                    var address = entry.address;
-                    if (address.split('@')[1] == domain) {
-                      addresses.push(address);
-                    }
-                  });
-                }
-
-                return Promise.map(addresses, function(email) {
-                  return Promise.resolve()
-                    .then(function() {
-                      var props = {
-                        email: email
-                      };
-                      return app.models.Mail_Account.findOrCreate(
-                        {
-                          where: props
-                        },
-                        props
-                      );
-                    })
-                    .then(function(mailAccount) {
-                      var mailboxPath = 'inbox';
-                      if (mailItem.spam || mailItem.infected) {
-                        mailboxPath = 'junk';
-                      }
-                      var props = {
-                        path: mailboxPath,
-                        accountId: mailAccount.instance.id
-                      };
-
-                      return app.models.Mail_Box.findOrCreate(
-                        {
-                          where: props
-                        },
-                        props
-                      );
-                    })
-                    .then(function(mailbox) {
-                      let props = {
-                        mailboxId: mailbox.instance.id,
-                        itemId: mailItem.id
-                      };
-                      return app.models.Mail_Item_Box.findOrCreate(
-                        {
-                          where: props
-                        },
-                        props
-                      );
-                    });
-                });
+                return mailbox.save();
               })
               .then(function() {
                 var KeyNew = urljoin('processed', storageKey);

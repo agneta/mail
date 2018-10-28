@@ -25,10 +25,10 @@ module.exports = function(Model, app) {
                 accountId: mailAccount.id
               })
             }).then(function(mailBoxes) {
-              return Promise.map(mailBoxes, function(mailBox) {
+              return Promise.map(mailBoxes, function(mailbox) {
                 return options.callback({
                   mailAccount: mailAccount,
-                  mailBox: mailBox
+                  mailbox: mailbox
                 });
               });
             });
