@@ -33,201 +33,223 @@ module.exports = function(locals) {
           return 'NONEXISTENT';
         }
 
-        return locals.userCache
-          .get(
-            session.user.id,
-            'imapMaxDownload',
-            (config.imap.maxDownloadMB || 10) * 1024 * 1024
-          )
-          .then(function(_limit) {
-            limit = _limit;
-            return locals.counters.ttlcounterAsync(
-              'idw:' + session.user.id,
-              0,
-              limit,
-              false
-            );
-          })
-          .then(function(res) {
-            if (!res.success) {
-              let err = new Error(
-                'Download was rate limited. Check again in ' +
-                  res.ttl +
-                  ' seconds'
+        return locals.app.models.Mail_Account_User.findOne({
+          where: {
+            accountId: mailboxData.mailAccountId,
+            userId: session.user.id
+          }
+        }).then(function(result) {
+          if (!result) {
+            return 'NONEXISTENT';
+          }
+
+          return locals.userCache
+            .get(
+              session.user.id,
+              'imapMaxDownload',
+              (config.imap.maxDownloadMB || 10) * 1024 * 1024
+            )
+            .then(function(_limit) {
+              limit = _limit;
+              return locals.counters.ttlcounterAsync(
+                'idw:' + session.user.id,
+                0,
+                limit,
+                false
               );
-              err.response = 'NO';
-              return Promise.reject(err);
-            }
+            })
+            .then(function(res) {
+              if (!res.success) {
+                let err = new Error(
+                  'Download was rate limited. Check again in ' +
+                    res.ttl +
+                    ' seconds'
+                );
+                err.response = 'NO';
+                return Promise.reject(err);
+              }
 
-            let rowCount = 0;
+              let rowCount = 0;
 
-            let fields = {
-              id: true,
-              uid: true,
-              modseq: true,
-              date: true,
-              flags: true,
-              headers: true
-            };
+              let fields = {
+                id: true,
+                uid: true,
+                modseq: true,
+                date: true,
+                flags: true,
+                headers: true
+              };
 
-            if (!options.metadataOnly) {
-              fields.html = true;
-              fields.text = true;
-            }
-            //console.log(options, options.messages.length);
-            return Promise.mapSeries(
-              options.messages,
-              function(messageId) {
-                let values = {
-                  pending: messageId
-                };
+              if (!options.metadataOnly) {
+                fields.html = true;
+                fields.text = true;
+              }
+              //console.log(options, options.messages.length);
+              return Promise.mapSeries(
+                options.messages,
+                function(messageUid) {
+                  let values = {
+                    pending: messageUid
+                  };
 
-                return locals.app.models.Mail_Item.findById(messageId, {
-                  fields: fields
-                })
-                  .then(function(message) {
-                    if (!message) {
-                      return;
-                    }
-                    var mailOptions = _.pick(message.__data, [
-                      'html',
-                      'text',
-                      'headers'
-                    ]);
+                  let where = {
+                    mailboxId: mailboxData.id,
+                    uid: messageUid
+                  };
 
-                    //console.log(mailOptions);
+                  console.log(where);
 
-                    return composeMail(mailOptions).then(function(mailRaw) {
-                      let mimeTree = locals.app.models.Mail_Item.indexer.parseMimeTree(
-                        mailRaw
-                      );
+                  return locals.app.models.Mail_Item.findOne({
+                    where: where,
+                    fields: fields
+                  })
+                    .then(function(message) {
+                      if (!message) {
+                        return;
+                      }
+                      var mailOptions = _.pick(message.__data, [
+                        'html',
+                        'text',
+                        'headers'
+                      ]);
 
-                      let messageData = {
-                        uid: message.uid,
-                        idate: message.date,
-                        mimeTree: mimeTree
-                      };
+                      //console.log(mailOptions);
 
-                      _.extend(
-                        messageData,
-                        _.pick(message.__data, ['modseq', 'flags'])
-                      );
+                      return composeMail(mailOptions).then(function(mailRaw) {
+                        let mimeTree = locals.app.models.Mail_Item.indexer.parseMimeTree(
+                          mailRaw
+                        );
 
-                      //console.log(messageData);
+                        let messageData = {
+                          uid: message.uid,
+                          idate: message.date,
+                          mimeTree: mimeTree
+                        };
 
-                      return new Promise(function(resolve, reject) {
-                        let markAsSeen =
-                          options.markAsSeen &&
-                          !message.flags.includes('\\Seen');
-
-                        values = session.getQueryResponse(
-                          options.query,
+                        _.extend(
                           messageData,
-                          {
-                            logger: locals.server.logger,
-                            fetchOptions: {},
-                            //attachmentStorage: locals.attachmentStorage,
-                            acceptUTF8Enabled: session.isUTF8Enabled()
-                          }
-                        );
-                        let stream = imapHandler.compileStream(
-                          session.formatResponse('FETCH', message.uid, {
-                            query: options.query,
-                            values: values
-                          })
+                          _.pick(message.__data, ['modseq', 'flags'])
                         );
 
-                        stream.description = util.format(
-                          '* FETCH #%s uid=%s size=%sB ',
-                          ++rowCount,
-                          message.uid,
-                          message.size
-                        );
+                        //console.log(messageData);
 
-                        stream.once('error', err => {
-                          err.processed = true;
-                          locals.server.logger.error(
+                        return new Promise(function(resolve, reject) {
+                          let markAsSeen =
+                            options.markAsSeen &&
+                            !message.flags.includes('\\Seen');
+
+                          values = session.getQueryResponse(
+                            options.query,
+                            messageData,
                             {
-                              err,
-                              tnx: 'fetch',
-                              cid: session.id
-                            },
-                            '[%s] FETCHFAIL %s. %s',
-                            session.id,
-                            messageData.uid,
-                            err.message
+                              logger: locals.server.logger,
+                              fetchOptions: {},
+                              //attachmentStorage: locals.attachmentStorage,
+                              acceptUTF8Enabled: session.isUTF8Enabled()
+                            }
+                          );
+                          let stream = imapHandler.compileStream(
+                            session.formatResponse('FETCH', message.uid, {
+                              query: options.query,
+                              values: values
+                            })
                           );
 
-                          session.socket.end('\n* BYE Internal Server Error\n');
-                          reject(err);
-                        });
-
-                        let limiter = new LimitedFetch({
-                          key: 'idw:' + session.user.id,
-                          ttlcounter: locals.counters.ttlcounter,
-                          maxBytes: limit
-                        });
-                        stream.pipe(limiter);
-
-                        // send formatted response to socket
-                        session.writeStream.write(limiter, () => {
-                          if (!markAsSeen) {
-                            return resolve();
-                          }
-
-                          locals.server.logger.debug(
-                            {
-                              tnx: 'flags',
-                              cid: session.id
-                            },
-                            '[%s] UPDATE FLAGS for "%s"',
-                            session.id,
-                            message.uid
+                          stream.description = util.format(
+                            '* FETCH #%s uid=%s size=%sB ',
+                            ++rowCount,
+                            message.uid,
+                            message.size
                           );
 
-                          var flags = message.flags.concat(['\\Seen']);
-                          flags = _.uniq(flags);
-                          return message
-                            .updateAttributes({
-                              flags: flags
-                            })
-                            .then(function() {
-                              return locals.server.notifier.addEntries(
-                                mailboxData,
-                                [
-                                  {
-                                    command: 'FETCH',
-                                    ignore: session.id,
-                                    uid: message.uid,
-                                    flags: message.flags,
-                                    message: message.id,
-                                    unseenChange: true
-                                  }
-                                ]
-                              );
-                            })
-                            .then(function() {
-                              return locals.server.notifier.fire(
-                                session.user.id
-                              );
-                            })
-                            .then(resolve)
-                            .catch(reject);
+                          stream.once('error', err => {
+                            err.processed = true;
+                            locals.server.logger.error(
+                              {
+                                err,
+                                tnx: 'fetch',
+                                cid: session.id
+                              },
+                              '[%s] FETCHFAIL %s. %s',
+                              session.id,
+                              messageData.uid,
+                              err.message
+                            );
+
+                            session.socket.end(
+                              '\n* BYE Internal Server Error\n'
+                            );
+                            reject(err);
+                          });
+
+                          let limiter = new LimitedFetch({
+                            key: 'idw:' + session.user.id,
+                            ttlcounter: locals.counters.ttlcounter,
+                            maxBytes: limit
+                          });
+                          stream.pipe(limiter);
+
+                          // send formatted response to socket
+                          session.writeStream.write(limiter, () => {
+                            if (!markAsSeen) {
+                              return resolve();
+                            }
+
+                            locals.server.logger.debug(
+                              {
+                                tnx: 'flags',
+                                cid: session.id
+                              },
+                              '[%s] UPDATE FLAGS for "%s"',
+                              session.id,
+                              message.uid
+                            );
+
+                            var flags = message.flags.concat(['\\Seen']);
+                            flags = _.uniq(flags);
+                            return message
+                              .updateAttributes({
+                                flags: flags
+                              })
+                              .then(function() {
+                                return locals.server.notifier.addEntries(
+                                  mailboxData,
+                                  [
+                                    {
+                                      command: 'FETCH',
+                                      ignore: session.id,
+                                      uid: message.uid,
+                                      flags: message.flags,
+                                      message: message.id,
+                                      unseenChange: true
+                                    }
+                                  ]
+                                );
+                              })
+                              .then(function() {
+                                return locals.server.notifier.fire(
+                                  session.user.id
+                                );
+                              })
+                              .then(resolve)
+                              .catch(reject);
+                          });
                         });
                       });
+                    })
+                    .then(function() {
+                      return values;
                     });
-                  })
-                  .then(function() {
-                    return values;
-                  });
-              },
-              {
-                concurrency: 1
-              }
-            ).then(function() {
-              return true;
+                },
+                {
+                  concurrency: 4
+                }
+              ).then(function(result) {
+                console.log(result);
+                return true;
+              });
             });
-          });
+        });
       })
       .asCallback(callback);
   };
