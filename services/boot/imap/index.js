@@ -7,7 +7,7 @@ const log = require('npmlog');
 const config = require('./config');
 const packageData = require('../../../package.json');
 
-const ImapNotifier = require('@agneta/imap/lib/imap-notifier');
+const ImapNotifier = require('./notifier');
 const Indexer = require('@agneta/imap/lib/indexer/indexer');
 const Counters = require('@agneta/imap/lib/counters');
 const Certs = require('./certs');

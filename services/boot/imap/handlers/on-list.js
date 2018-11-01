@@ -8,7 +8,7 @@ module.exports = function(locals) {
       .then(function() {
         return locals.app.models.Mail_Box._forEach({
           userId: session.user.id,
-          where: query.wehere,
+          where: query.where,
           callback: function(data) {
             result.push(data.mailbox);
           }

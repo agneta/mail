@@ -76,7 +76,6 @@ module.exports = function(locals) {
                   return;
                 }
 
-                let flagsupdate = false; // query object for updates
                 let updated = false;
                 let existingFlags = message.flags.map(flag =>
                   flag.toLowerCase().trim()
@@ -100,23 +99,8 @@ module.exports = function(locals) {
 
                     // set flags
                     if (updated) {
-                      flagsupdate = {
-                        flags: message.flags
-                      };
-
                       if (message.flags.includes('\\Deleted')) {
                         shouldExpunge = true;
-                      }
-
-                      if (
-                        !['\\Junk', '\\Trash'].includes(
-                          mailboxData.specialUse
-                        ) &&
-                        !message.flags.includes('\\Deleted')
-                      ) {
-                        flagsupdate.searchable = true;
-                      } else {
-                        flagsupdate.searchable = false;
                       }
                     }
                     break;
@@ -136,38 +120,11 @@ module.exports = function(locals) {
                       })
                     );
 
-                    // add flags
-                    if (updated) {
-                      flagsupdate = {
-                        $addToSet: {
-                          flags: {
-                            $each: newFlags
-                          }
-                        }
-                      };
-
-                      if (
-                        newFlags.includes('\\Seen') ||
-                        newFlags.includes('\\Flagged') ||
-                        newFlags.includes('\\Deleted') ||
-                        newFlags.includes('\\Draft')
-                      ) {
-                        flagsupdate = {};
-                        if (newFlags.includes('\\Deleted')) {
-                          shouldExpunge = true;
-                          flagsupdate = {
-                            undeleted: false
-                          };
-                          flagsupdate.searchable = false;
-                        }
-                      }
-                    }
                     break;
                   }
 
                   case 'remove': {
                     // We need to use the case of existing flags when removing
-                    let oldFlags = [];
                     let flagsUpdates = update.value.map(flag =>
                       flag.toLowerCase().trim()
                     );
@@ -175,38 +132,10 @@ module.exports = function(locals) {
                       if (!flagsUpdates.includes(flag.toLowerCase().trim())) {
                         return true;
                       }
-                      oldFlags.push(flag);
                       updated = true;
                       return false;
                     });
 
-                    // remove flags
-                    if (updated) {
-                      flagsupdate = {
-                        $pull: {
-                          flags: {
-                            $in: oldFlags
-                          }
-                        }
-                      };
-                      if (
-                        oldFlags.includes('\\Seen') ||
-                        oldFlags.includes('\\Flagged') ||
-                        oldFlags.includes('\\Deleted') ||
-                        oldFlags.includes('\\Draft')
-                      ) {
-                        flagsupdate = {};
-                        if (oldFlags.includes('\\Deleted')) {
-                          if (
-                            !['\\Junk', '\\Trash'].includes(
-                              mailboxData.specialUse
-                            )
-                          ) {
-                            flagsupdate.searchable = true;
-                          }
-                        }
-                      }
-                    }
                     break;
                   }
                 }
@@ -224,27 +153,26 @@ module.exports = function(locals) {
                       );
                     }
 
-                    flagsupdate.modseq = modseq;
-
-                    return message
-                      .updateAttributes(flagsupdate)
-                      .then(function() {
-                        return locals.server.notifier
-                          .addEntries(mailboxData, [
-                            {
-                              command: 'FETCH',
-                              ignore: session.id,
-                              uid: message.uid,
-                              flags: message.flags,
-                              message: message._id,
-                              modseq,
-                              unseenChange
-                            }
-                          ])
-                          .then(function() {
-                            return locals.server.notifier.fire(session.user.id);
-                          });
-                      });
+                    return Mail_Item.upsert({
+                      id: message.id,
+                      flags: message.flags
+                    }).then(function() {
+                      return locals.server.notifier
+                        .addEntries(mailboxData, [
+                          {
+                            command: 'FETCH',
+                            ignore: session.id,
+                            uid: message.uid,
+                            flags: message.flags,
+                            message: message.id,
+                            modseq,
+                            unseenChange
+                          }
+                        ])
+                        .then(function() {
+                          return locals.server.notifier.fire(session.user.id);
+                        });
+                    });
                   });
                 }
               })

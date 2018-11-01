@@ -4,12 +4,11 @@ const _ = require('lodash');
 module.exports = function(locals) {
   return function(path, session, callback) {
     var pathParsed = path.split('/');
-    let pathBase = pathParsed.shift();
     return Promise.resolve()
       .then(function() {
         return locals.app.models.Mail_Account.findOne({
           where: {
-            name: pathBase
+            name: pathParsed[1]
           }
         }).then(function(mailAccount) {
           if (!mailAccount) {

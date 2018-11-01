@@ -146,12 +146,12 @@ module.exports = function(app) {
                 );
               })
               .then(function(mailAccount) {
-                var mailboxPath = 'inbox';
+                var mailboxPath = 'INBOX';
                 if (emailProps.spam || emailProps.infected) {
-                  mailboxPath = 'junk';
+                  mailboxPath = 'JUNK';
                 }
                 var props = {
-                  path: `${mailAccount.name}/${mailboxPath}`,
+                  path: `${mailboxPath}/${mailAccount.name}`,
                   mailAccountId: mailAccount.id
                 };
 
