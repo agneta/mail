@@ -155,16 +155,16 @@ class ImapNotifier extends EventEmitter {
 
         let mailboxData;
         let mailboxQuery;
-
-        if (mailbox._id) {
+        let mailboxId = mailbox._id || mailbox.id;
+        if (mailboxId) {
           // we were already provided a mailbox object
           mailboxQuery = {
-            _id: mailbox._id
+            id: mailboxId
           };
           mailboxData = mailbox;
         } else {
           mailboxQuery = {
-            _id: mailbox
+            id: mailbox
           };
         }
 
@@ -208,39 +208,33 @@ class ImapNotifier extends EventEmitter {
         entries.forEach(entry => {
           entry.modseq = entry.modseq || modseq;
           entry.created = entry.created || created;
-          entry.mailbox = entry.mailbox || mailboxData._id;
+          entry.mailbox = entry.mailbox || mailboxData.id;
           entry.user = mailboxData.user;
         });
 
         if (updated.length) {
-          this.logger.debug(
+          self.logger.debug(
             'Updating message collection %s %s entries',
-            mailboxData._id,
+            mailboxData.id,
             updated.length
           );
-          this.database.collection('messages').updateMany(
-            {
-              _id: {
-                $in: updated
-              },
-              mailbox: mailboxData._id
-            },
-            {
-              // only update modseq if the new value is larger than old one
-              $max: {
-                modseq
+
+          return Promise.map(updated, function(messageId) {
+            return self.models.Mail_Item.count({
+              id: messageId,
+              modseq: {
+                lt: modseq
               }
-            },
-            err => {
-              if (err) {
-                this.logger.error(
-                  'Error updating modseq for messages. %s',
-                  err.message
-                );
+            }).then(function(count) {
+              if (!count) {
+                return;
               }
-              return pushToJournal();
-            }
-          );
+              return self.models.Mail_Item.upsert({
+                id: messageId,
+                modseq: modseq
+              });
+            });
+          });
         } else {
           return pushToJournal();
         }
@@ -275,15 +269,12 @@ class ImapNotifier extends EventEmitter {
    */
   getUpdates(mailbox, modifyIndex, callback) {
     modifyIndex = Number(modifyIndex) || 0;
-    this.database
-      .collection('journal')
-      .find({
-        mailbox: mailbox._id || mailbox,
-        modseq: {
-          $gt: modifyIndex
-        }
-      })
-      .toArray(callback);
+    return this.models.Mail_Journal.find({
+      mailbox: mailbox._id || mailbox,
+      modseq: {
+        $gt: modifyIndex
+      }
+    }).asCallback(callback);
   }
 
   updateCounters(entries) {
