@@ -127,7 +127,7 @@ module.exports = function(locals) {
                         mailOptions.sender = mailOptions.from;
                       }
 
-                      //console.log(mailOptions);
+                      console.log(mailOptions);
 
                       return composeMail(mailOptions).then(function(mailRaw) {
                         /*
@@ -136,7 +136,6 @@ module.exports = function(locals) {
                           .then(function(parsed) {
                             console.log('test check', parsed);
                           });*/
-
                         let mimeTree = locals.app.models.Mail_Item.indexer.parseMimeTree(
                           mailRaw
                         );

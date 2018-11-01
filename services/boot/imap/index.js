@@ -175,45 +175,28 @@ module.exports = function(_app) {
     notifier = new ImapNotifier(options);
     userCache = UserCache(options);
 
-    let ifaceOptions = [
-      {
-        enabled: true,
-        secure: config.imap.secure,
-        disableSTARTTLS: config.imap.disableSTARTTLS,
-        ignoreSTARTTLS: config.imap.ignoreSTARTTLS,
-        host: config.imap.host,
-        port: config.imap.port
-      }
-    ]
-      .concat(config.imap.interface || [])
-      .filter(iface => iface.enabled);
-
-    let iPos = 0;
-    let startInterfaces = () => {
-      if (iPos >= ifaceOptions.length) {
-        return;
-      }
-      let opts = ifaceOptions[iPos++];
-
-      return createInterface(opts)
-        .catch(function(err) {
-          logger.error(
-            {
-              err,
-              tnx: 'bind'
-            },
-            'Failed starting %sIMAP interface %s:%s. %s',
-            opts.secure ? 'secure ' : '',
-            opts.host,
-            opts.port,
-            err.message
-          );
-          return Promise.reject(err);
-        })
-        .then(function() {
-          return startInterfaces();
-        });
+    let opts = {
+      enabled: true,
+      secure: config.imap.secure,
+      disableSTARTTLS: config.imap.disableSTARTTLS,
+      ignoreSTARTTLS: config.imap.ignoreSTARTTLS,
+      host: config.imap.host,
+      port: config.imap.port
     };
-    return startInterfaces();
+
+    return createInterface(opts).catch(function(err) {
+      logger.error(
+        {
+          err,
+          tnx: 'bind'
+        },
+        'Failed starting %sIMAP interface %s:%s. %s',
+        opts.secure ? 'secure ' : '',
+        opts.host,
+        opts.port,
+        err.message
+      );
+      return Promise.reject(err);
+    });
   });
 };

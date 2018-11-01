@@ -4,7 +4,6 @@ const jobName = 'emailReceive';
 
 module.exports = function(app) {
   var config = app.get('storage');
-  var domain = app.web.project.config.domain.production;
   if (!config) {
     return;
   }
@@ -32,8 +31,10 @@ module.exports = function(app) {
 
         return Promise.map(
           result.Contents,
-          function(item) {
-            return app.models.Mail_Item.add(item).then(function() {
+          function(s3Object) {
+            return app.models.Mail_Item.add({
+              s3Object: s3Object
+            }).then(function() {
               progress++;
               console.log(
                 `Processing emails: [${progress}/${result.Contents.length}]`

@@ -270,22 +270,32 @@ module.exports = function(Model, app) {
         }
       })
       .then(function() {
-        return app.imap.server.notifier.addEntries(
-          mailbox,
-          {
+        return mailbox.save();
+      })
+      .then(function() {
+        var KeyNew = urljoin('processed', storageKey);
+
+        return app.storage.moveObject({
+          Bucket: config.buckets.email,
+          From: item.Key,
+          To: KeyNew
+        });
+      })
+      .then(function() {
+        return app.imap.server.notifier
+          .addEntries(mailbox, {
             command: 'EXISTS',
             uid: mailItem.uid,
             ignore: options.session && options.session.id,
             message: mailItem.id,
             modseq: mailItem.modseq,
             unseen: mailItem.unseen
-          },
-          () => {
-            this.notifier.fire({
+          })
+          .then(function() {
+            return app.imap.server.notifier.fire({
               mailAccount: mailbox.mailAccountId
             });
-          }
-        );
+          });
       })
       .catch(function(err) {
         if (err.skip) {
@@ -298,18 +308,6 @@ module.exports = function(Model, app) {
           });
         }
         return Promise.reject(err);
-      })
-      .then(function() {
-        return mailbox.save();
-      })
-      .then(function() {
-        var KeyNew = urljoin('processed', storageKey);
-
-        return app.storage.moveObject({
-          Bucket: config.buckets.email,
-          From: item.Key,
-          To: KeyNew
-        });
       });
   };
 };

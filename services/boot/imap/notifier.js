@@ -261,7 +261,7 @@ class ImapNotifier extends EventEmitter {
         if (options.mailAccount) {
           return self.models.Mail_Account_User.find({
             fields: {
-              userid: true
+              userId: true
             },
             where: {
               accountId: options.mailAccount
