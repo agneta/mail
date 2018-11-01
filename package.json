@@ -19,6 +19,7 @@
     "bluebird": "^3.5.2",
     "cheerio": "^1.0.0-rc.2",
     "chokidar": "^2.0.4",
+    "eml-format": "^0.5.0",
     "isemail": "^3.2.0",
     "lodash": "^4.17.11",
     "mailparser": "^2.3.4",

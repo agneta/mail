@@ -15,7 +15,7 @@ module.exports = function(locals) {
         });
       })
       .then(function() {
-        console.log(result);
+        //console.log(result);
         return result;
       })
       .asCallback(callback);

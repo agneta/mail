@@ -21,7 +21,7 @@ module.exports = function(app) {
     return Promise.resolve()
       .then(function() {
         return app.storage.listObjects({
-          Bucket: config.buckets.email,
+          Bucket: config.buckets.email.host,
           Prefix: 'incoming/'
         });
       })

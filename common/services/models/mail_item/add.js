@@ -35,7 +35,6 @@ module.exports = function(Model, app) {
             message: 'it is a directory'
           });
         }
-        //console.log(headObject);
 
         var objectStream = app.storage.getObjectStream({
           Bucket: config.buckets.email,
@@ -45,17 +44,22 @@ module.exports = function(Model, app) {
       })
       .then(function(_emailParsed) {
         emailParsed = _emailParsed;
-        emailParsed.headers = [...emailParsed.headers.entries()].reduce(
-          (obj, [key, value]) => ((obj[key] = value), obj),
-          {}
-        );
+        //console.log(emailParsed);
+
+        emailParsed.headersRaw = {};
+        emailParsed.headerLines.forEach(function(headerLine) {
+          var headerParsed = headerLine.line.split(':');
+          var headerName = _.trim(headerParsed.shift());
+          var headerValue = _.trim(headerParsed.join(':'));
+          emailParsed.headersRaw[headerName] = headerValue;
+        });
 
         emailProps = {
-          spam: emailParsed.headers['x-ses-spam-verdict'] != 'PASS',
-          infected: emailParsed.headers['x-ses-virus-verdict'] != 'PASS'
+          spam: emailParsed.headers.get('x-ses-spam-verdict') != 'PASS',
+          infected: emailParsed.headers.get('x-ses-virus-verdict') != 'PASS'
         };
 
-        var receivedEntry = emailParsed.headers['received'];
+        var receivedEntry = emailParsed.headers.get('received');
         if (!receivedEntry) {
           console.error(emailParsed.headers);
 
@@ -152,7 +156,7 @@ module.exports = function(Model, app) {
           replyTo: replyTo.value,
           references: emailParsed.references,
           storageKey: storageKey,
-          headers: emailParsed.headers,
+          headers: emailParsed.headersRaw,
           subject: emailParsed.subject,
           messageId: emailParsed.messageId,
           date: emailParsed.date,

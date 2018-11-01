@@ -17,13 +17,7 @@ module.exports = function(locals) {
     if (!isemail.validate(email)) {
       email = `${email}@agneta.io`;
     }
-    let credentials = {
-      email: email,
-      password: login.password
-    };
     let account;
-
-    console.log(credentials);
 
     Promise.resolve()
       .then(function() {
