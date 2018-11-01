@@ -85,7 +85,7 @@ module.exports = function(locals) {
                 fields.text = true;
               }
               //console.log(options, options.messages.length);
-              return Promise.mapSeries(
+              return Promise.map(
                 options.messages,
                 function(messageUid) {
                   let values = {
@@ -112,18 +112,31 @@ module.exports = function(locals) {
                         'text',
                         'headers'
                       ]);
-                      ['to', 'from', 'cc', 'bcc'].forEach(function(prop) {
+                      ['to', 'from', 'cc', 'bcc', 'sender'].forEach(function(
+                        prop
+                      ) {
                         var header = mailOptions.headers[prop];
                         if (!header) {
                           return;
                         }
-                        mailOptions[prop] = header.text;
+                        mailOptions[prop] = header.value;
                         mailOptions.headers[prop] = undefined;
                       });
 
-                      console.log(mailOptions);
+                      if (!mailOptions.sender) {
+                        mailOptions.sender = mailOptions.from;
+                      }
+
+                      //console.log(mailOptions);
 
                       return composeMail(mailOptions).then(function(mailRaw) {
+                        /*
+                        require('mailparser')
+                          .simpleParser(mailRaw)
+                          .then(function(parsed) {
+                            console.log('test check', parsed);
+                          });*/
+
                         let mimeTree = locals.app.models.Mail_Item.indexer.parseMimeTree(
                           mailRaw
                         );

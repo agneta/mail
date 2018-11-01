@@ -48,218 +48,233 @@ module.exports = function(locals) {
         let condstoreEnabled = !!session.selected.condstoreEnabled;
         let shouldExpunge = false;
 
-        return Promise.map(update.messages, function(messageUid) {
-          return Mail_Item.findOne({
-            where: {
-              uid: messageUid,
-              mailboxId: mailbox
-            },
-            fields: {
-              id: true,
-              uid: true,
-              flags: true,
-              modseq: true
-            }
-          })
-            .then(function(message) {
-              // We have to process all messages one by one instead of just calling an update
-              // for all messages as we need to know which messages were exactly modified,
-              // otherwise we can't send flag update notifications and modify modseq values
-
-              if (
-                update.unchangedSince &&
-                message.modseq > update.unchangedSince
-              ) {
-                modified.push(message.uid);
-                return;
+        return Promise.map(
+          update.messages,
+          function(messageUid) {
+            return Mail_Item.findOne({
+              where: {
+                uid: messageUid,
+                mailboxId: mailbox
+              },
+              fields: {
+                id: true,
+                uid: true,
+                flags: true,
+                modseq: true
               }
+            })
+              .then(function(message) {
+                // We have to process all messages one by one instead of just calling an update
+                // for all messages as we need to know which messages were exactly modified,
+                // otherwise we can't send flag update notifications and modify modseq values
 
-              let flagsupdate = false; // query object for updates
-              let updated = false;
-              let existingFlags = message.flags.map(flag =>
-                flag.toLowerCase().trim()
-              );
-              switch (update.action) {
-                case 'set':
-                  // check if update set matches current or is different
-                  if (
-                    // if length does not match
-                    existingFlags.length !== update.value.length ||
-                    // or a new flag was found
-                    update.value.filter(
-                      flag => !existingFlags.includes(flag.toLowerCase().trim())
-                    ).length
-                  ) {
-                    updated = true;
-                  }
+                if (
+                  update.unchangedSince &&
+                  message.modseq > update.unchangedSince
+                ) {
+                  modified.push(message.uid);
+                  return;
+                }
 
-                  message.flags = [].concat(update.value);
-
-                  // set flags
-                  if (updated) {
-                    flagsupdate = {
-                      flags: message.flags
-                    };
-
-                    if (message.flags.includes('\\Deleted')) {
-                      shouldExpunge = true;
+                let flagsupdate = false; // query object for updates
+                let updated = false;
+                let existingFlags = message.flags.map(flag =>
+                  flag.toLowerCase().trim()
+                );
+                switch (update.action) {
+                  case 'set':
+                    // check if update set matches current or is different
+                    if (
+                      // if length does not match
+                      existingFlags.length !== update.value.length ||
+                      // or a new flag was found
+                      update.value.filter(
+                        flag =>
+                          !existingFlags.includes(flag.toLowerCase().trim())
+                      ).length
+                    ) {
+                      updated = true;
                     }
 
-                    if (
-                      !['\\Junk', '\\Trash'].includes(mailboxData.specialUse) &&
-                      !message.flags.includes('\\Deleted')
-                    ) {
-                      flagsupdate.searchable = true;
-                    } else {
-                      flagsupdate.searchable = false;
-                    }
-                  }
-                  break;
+                    message.flags = [].concat(update.value);
 
-                case 'add': {
-                  let newFlags = [];
-                  message.flags = message.flags.concat(
-                    update.value.filter(flag => {
-                      if (!existingFlags.includes(flag.toLowerCase().trim())) {
-                        updated = true;
-                        newFlags.push(flag);
-                        return true;
-                      }
-                      return false;
-                    })
-                  );
+                    // set flags
+                    if (updated) {
+                      flagsupdate = {
+                        flags: message.flags
+                      };
 
-                  // add flags
-                  if (updated) {
-                    flagsupdate = {
-                      $addToSet: {
-                        flags: {
-                          $each: newFlags
-                        }
-                      }
-                    };
-
-                    if (
-                      newFlags.includes('\\Seen') ||
-                      newFlags.includes('\\Flagged') ||
-                      newFlags.includes('\\Deleted') ||
-                      newFlags.includes('\\Draft')
-                    ) {
-                      flagsupdate = {};
-                      if (newFlags.includes('\\Deleted')) {
+                      if (message.flags.includes('\\Deleted')) {
                         shouldExpunge = true;
-                        flagsupdate = {
-                          undeleted: false
-                        };
+                      }
+
+                      if (
+                        !['\\Junk', '\\Trash'].includes(
+                          mailboxData.specialUse
+                        ) &&
+                        !message.flags.includes('\\Deleted')
+                      ) {
+                        flagsupdate.searchable = true;
+                      } else {
                         flagsupdate.searchable = false;
                       }
                     }
-                  }
-                  break;
-                }
+                    break;
 
-                case 'remove': {
-                  // We need to use the case of existing flags when removing
-                  let oldFlags = [];
-                  let flagsUpdates = update.value.map(flag =>
-                    flag.toLowerCase().trim()
-                  );
-                  message.flags = message.flags.filter(flag => {
-                    if (!flagsUpdates.includes(flag.toLowerCase().trim())) {
-                      return true;
-                    }
-                    oldFlags.push(flag);
-                    updated = true;
-                    return false;
-                  });
-
-                  // remove flags
-                  if (updated) {
-                    flagsupdate = {
-                      $pull: {
-                        flags: {
-                          $in: oldFlags
-                        }
-                      }
-                    };
-                    if (
-                      oldFlags.includes('\\Seen') ||
-                      oldFlags.includes('\\Flagged') ||
-                      oldFlags.includes('\\Deleted') ||
-                      oldFlags.includes('\\Draft')
-                    ) {
-                      flagsupdate = {};
-                      if (oldFlags.includes('\\Deleted')) {
+                  case 'add': {
+                    let newFlags = [];
+                    message.flags = message.flags.concat(
+                      update.value.filter(flag => {
                         if (
-                          !['\\Junk', '\\Trash'].includes(
-                            mailboxData.specialUse
-                          )
+                          !existingFlags.includes(flag.toLowerCase().trim())
                         ) {
-                          flagsupdate.searchable = true;
+                          updated = true;
+                          newFlags.push(flag);
+                          return true;
                         }
-                      }
-                    }
-                  }
-                  break;
-                }
-              }
-
-              if (updated) {
-                return getModseq().then(function(modseq) {
-                  if (!update.silent || condstoreEnabled) {
-                    // print updated state of the message
-                    session.writeStream.write(
-                      session.formatResponse('FETCH', message.uid, {
-                        uid: update.isUid ? message.uid : false,
-                        flags: message.flags,
-                        modseq: condstoreEnabled ? modseq : false
+                        return false;
                       })
                     );
+
+                    // add flags
+                    if (updated) {
+                      flagsupdate = {
+                        $addToSet: {
+                          flags: {
+                            $each: newFlags
+                          }
+                        }
+                      };
+
+                      if (
+                        newFlags.includes('\\Seen') ||
+                        newFlags.includes('\\Flagged') ||
+                        newFlags.includes('\\Deleted') ||
+                        newFlags.includes('\\Draft')
+                      ) {
+                        flagsupdate = {};
+                        if (newFlags.includes('\\Deleted')) {
+                          shouldExpunge = true;
+                          flagsupdate = {
+                            undeleted: false
+                          };
+                          flagsupdate.searchable = false;
+                        }
+                      }
+                    }
+                    break;
                   }
 
-                  flagsupdate.modseq = modseq;
+                  case 'remove': {
+                    // We need to use the case of existing flags when removing
+                    let oldFlags = [];
+                    let flagsUpdates = update.value.map(flag =>
+                      flag.toLowerCase().trim()
+                    );
+                    message.flags = message.flags.filter(flag => {
+                      if (!flagsUpdates.includes(flag.toLowerCase().trim())) {
+                        return true;
+                      }
+                      oldFlags.push(flag);
+                      updated = true;
+                      return false;
+                    });
 
-                  return message.updateAttributes(flagsupdate).then(function() {
-                    return locals.server.notifier
-                      .addEntries(mailboxData, [
-                        {
-                          command: 'FETCH',
-                          ignore: session.id,
-                          uid: message.uid,
-                          flags: message.flags,
-                          message: message._id,
-                          modseq,
-                          unseenChange
+                    // remove flags
+                    if (updated) {
+                      flagsupdate = {
+                        $pull: {
+                          flags: {
+                            $in: oldFlags
+                          }
                         }
-                      ])
+                      };
+                      if (
+                        oldFlags.includes('\\Seen') ||
+                        oldFlags.includes('\\Flagged') ||
+                        oldFlags.includes('\\Deleted') ||
+                        oldFlags.includes('\\Draft')
+                      ) {
+                        flagsupdate = {};
+                        if (oldFlags.includes('\\Deleted')) {
+                          if (
+                            !['\\Junk', '\\Trash'].includes(
+                              mailboxData.specialUse
+                            )
+                          ) {
+                            flagsupdate.searchable = true;
+                          }
+                        }
+                      }
+                    }
+                    break;
+                  }
+                }
+
+                if (updated) {
+                  return getModseq().then(function(modseq) {
+                    if (!update.silent || condstoreEnabled) {
+                      // print updated state of the message
+                      session.writeStream.write(
+                        session.formatResponse('FETCH', message.uid, {
+                          uid: update.isUid ? message.uid : false,
+                          flags: message.flags,
+                          modseq: condstoreEnabled ? modseq : false
+                        })
+                      );
+                    }
+
+                    flagsupdate.modseq = modseq;
+
+                    return message
+                      .updateAttributes(flagsupdate)
                       .then(function() {
-                        return locals.server.notifier.fire(session.user.id);
+                        return locals.server.notifier
+                          .addEntries(mailboxData, [
+                            {
+                              command: 'FETCH',
+                              ignore: session.id,
+                              uid: message.uid,
+                              flags: message.flags,
+                              message: message._id,
+                              modseq,
+                              unseenChange
+                            }
+                          ])
+                          .then(function() {
+                            return locals.server.notifier.fire(session.user.id);
+                          });
                       });
                   });
-                });
-              }
-            })
-            .then(function() {
-              if (config.imap.autoExpunge && shouldExpunge) {
-                // shcedule EXPUNGE command for current folder
-                let expungeOptions = {
-                  // create new temporary session so it would not mix with the active one
-                  id:
-                    'auto.' +
-                    base32.encode(crypto.randomBytes(10)).toLowerCase(),
-                  user: {
-                    id: session.user.id,
-                    username: session.user.username
-                  }
-                };
-                return locals.server
-                  .onExpunge(mailbox, { silent: true }, expungeOptions)
-                  .then(function() {
-                    return false;
-                  });
-              }
-              return updateMailboxFlags(mailboxData, update);
-            });
+                }
+              })
+              .then(function() {
+                if (config.imap.autoExpunge && shouldExpunge) {
+                  // shcedule EXPUNGE command for current folder
+                  let expungeOptions = {
+                    // create new temporary session so it would not mix with the active one
+                    id:
+                      'auto.' +
+                      base32.encode(crypto.randomBytes(10)).toLowerCase(),
+                    user: {
+                      id: session.user.id,
+                      username: session.user.username
+                    }
+                  };
+                  return locals.server
+                    .onExpunge(mailbox, { silent: true }, expungeOptions)
+                    .then(function() {
+                      return false;
+                    });
+                }
+                return updateMailboxFlags(mailboxData, update);
+              });
+          },
+          {
+            concurrency: 4
+          }
+        ).then(function() {
+          return true;
         });
       })
       .asCallback(callback);
