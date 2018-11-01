@@ -35,4 +35,5 @@ module.exports = function(Model, app) {
   require('./send')(Model, app);
   require('./forEach')(Model, app);
   require('./html')(Model, app);
+  require('./beforeSave')(Model, app);
 };

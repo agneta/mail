@@ -97,7 +97,7 @@ module.exports = function(locals) {
                     uid: messageUid
                   };
 
-                  console.log(where);
+                  //console.log(where);
 
                   return locals.app.models.Mail_Item.findOne({
                     where: where,
@@ -112,8 +112,16 @@ module.exports = function(locals) {
                         'text',
                         'headers'
                       ]);
+                      ['to', 'from', 'cc', 'bcc'].forEach(function(prop) {
+                        var header = mailOptions.headers[prop];
+                        if (!header) {
+                          return;
+                        }
+                        mailOptions[prop] = header.text;
+                        mailOptions.headers[prop] = undefined;
+                      });
 
-                      //console.log(mailOptions);
+                      console.log(mailOptions);
 
                       return composeMail(mailOptions).then(function(mailRaw) {
                         let mimeTree = locals.app.models.Mail_Item.indexer.parseMimeTree(
@@ -244,8 +252,8 @@ module.exports = function(locals) {
                 {
                   concurrency: 4
                 }
-              ).then(function(result) {
-                console.log(result);
+              ).then(function() {
+                //console.log(result);
                 return true;
               });
             });
