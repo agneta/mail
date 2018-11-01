@@ -18,11 +18,12 @@ module.exports = function(Model, app) {
     let emailProps = null;
     let headObject;
     let mailbox;
+    let bucket = config.buckets.email.host;
 
     return Promise.resolve()
       .then(function() {
         return app.storage.headObject({
-          Bucket: config.buckets.email,
+          Bucket: bucket,
           Key: item.Key
         });
       })
@@ -37,7 +38,7 @@ module.exports = function(Model, app) {
         }
 
         var objectStream = app.storage.getObjectStream({
-          Bucket: config.buckets.email,
+          Bucket: bucket,
           Key: item.Key
         });
         return simpleParser(objectStream);
@@ -46,20 +47,17 @@ module.exports = function(Model, app) {
         emailParsed = _emailParsed;
         //console.log(emailParsed);
 
-        emailParsed.headersRaw = {};
-        emailParsed.headerLines.forEach(function(headerLine) {
-          var headerParsed = headerLine.line.split(':');
-          var headerName = _.trim(headerParsed.shift());
-          var headerValue = _.trim(headerParsed.join(':'));
-          emailParsed.headersRaw[headerName] = headerValue;
-        });
+        emailParsed.headers = [...emailParsed.headers.entries()].reduce(
+          (obj, [key, value]) => ((obj[key] = value), obj),
+          {}
+        );
 
         emailProps = {
-          spam: emailParsed.headers.get('x-ses-spam-verdict') != 'PASS',
-          infected: emailParsed.headers.get('x-ses-virus-verdict') != 'PASS'
+          spam: emailParsed.headers['x-ses-spam-verdict'] != 'PASS',
+          infected: emailParsed.headers['x-ses-virus-verdict'] != 'PASS'
         };
 
-        var receivedEntry = emailParsed.headers.get('received');
+        var receivedEntry = emailParsed.headers.received;
         if (!receivedEntry) {
           console.error(emailParsed.headers);
 
@@ -156,7 +154,7 @@ module.exports = function(Model, app) {
           replyTo: replyTo.value,
           references: emailParsed.references,
           storageKey: storageKey,
-          headers: emailParsed.headersRaw,
+          headers: emailParsed.headers,
           subject: emailParsed.subject,
           messageId: emailParsed.messageId,
           date: emailParsed.date,
@@ -280,7 +278,7 @@ module.exports = function(Model, app) {
         var KeyNew = urljoin('processed', storageKey);
 
         return app.storage.moveObject({
-          Bucket: config.buckets.email,
+          Bucket: bucket,
           From: item.Key,
           To: KeyNew
         });
@@ -306,7 +304,7 @@ module.exports = function(Model, app) {
           var KeyNew = urljoin('skipped', storageKey);
 
           return app.storage.moveObject({
-            Bucket: config.buckets.email,
+            Bucket: bucket,
             From: item.Key,
             To: KeyNew
           });

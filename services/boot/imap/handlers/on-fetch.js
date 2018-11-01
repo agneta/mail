@@ -109,13 +109,25 @@ module.exports = function(locals) {
                       }
                       var mailOptions = _.pick(message.__data, [
                         'html',
-                        'text',
-                        'headers'
+                        'text'
                       ]);
+
+                      mailOptions.headers = _.pick(message.headers, [
+                        'message-id',
+                        'subject',
+                        'date',
+                        'reply-to',
+                        'return-path',
+                        'received',
+                        'received-spf',
+                        'x-mailer',
+                        'references'
+                      ]);
+
                       ['to', 'from', 'cc', 'bcc', 'sender'].forEach(function(
                         prop
                       ) {
-                        var header = mailOptions.headers[prop];
+                        var header = message.__data.headers[prop];
                         if (!header) {
                           return;
                         }
@@ -127,7 +139,7 @@ module.exports = function(locals) {
                         mailOptions.sender = mailOptions.from;
                       }
 
-                      //console.log(mailOptions);
+                      console.log(mailOptions);
 
                       return composeMail(mailOptions).then(function(mailRaw) {
                         /*

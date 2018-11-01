@@ -16,7 +16,6 @@ module.exports = function(app) {
   });
 
   app.queue.process(jobName, rotateCheck);
-
   function rotateCheck() {
     return Promise.resolve()
       .then(function() {
