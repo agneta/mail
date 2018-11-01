@@ -5,6 +5,7 @@ const log = require('npmlog');
 const counters = require('@agneta/imap/lib/counters');
 const consts = require('@agneta/imap/lib/consts');
 const Promise = require('bluebird');
+const _ = require('lodash');
 
 class ImapNotifier extends EventEmitter {
   constructor(options) {
@@ -247,17 +248,40 @@ class ImapNotifier extends EventEmitter {
    *
    * @param {String} user User ID
    */
-  fire(user, payload) {
-    if (!user) {
+  fire(options, payload) {
+    var self = this;
+    if (!options) {
       return;
     }
-    setImmediate(() => {
-      let data = JSON.stringify({
-        e: user.toString(),
-        p: payload
+    return Promise.resolve()
+      .then(function() {
+        if (_.isString(options)) {
+          return [options];
+        }
+        if (options.mailAccount) {
+          return self.models.Mail_Account_User.find({
+            fields: {
+              userid: true
+            },
+            where: {
+              accountId: options.mailAccount
+            }
+          }).then(function(result) {
+            return _.map(result, 'userId');
+          });
+        }
+        throw new Error('Options are not correct');
+      })
+      .then(function(users) {
+        return Promise.map(users, function(user) {
+          let data = JSON.stringify({
+            e: user.toString(),
+            p: payload
+          });
+          console.log(data);
+          return self.publisher.publish('wd_events', data);
+        });
       });
-      this.publisher.publish('wd_events', data);
-    });
   }
 
   /**

@@ -55,160 +55,165 @@ let app;
 let userCache;
 let counters;
 
-let createInterface = (ifaceOptions, callback) => {
-  // Setup server
-  const serverOptions = {
-    secure: ifaceOptions.secure,
-    secured: ifaceOptions.secured,
+let createInterface = ifaceOptions => {
+  return new Promise(function(resolve, reject) {
+    // Setup server
+    const serverOptions = {
+      secure: ifaceOptions.secure,
+      secured: ifaceOptions.secured,
 
-    disableSTARTTLS: ifaceOptions.disableSTARTTLS,
-    ignoreSTARTTLS: ifaceOptions.ignoreSTARTTLS,
+      disableSTARTTLS: ifaceOptions.disableSTARTTLS,
+      ignoreSTARTTLS: ifaceOptions.ignoreSTARTTLS,
 
-    useProxy: !!config.imap.useProxy,
-    ignoredHosts: config.imap.ignoredHosts,
+      useProxy: !!config.imap.useProxy,
+      ignoredHosts: config.imap.ignoredHosts,
 
-    id: {
-      name: config.imap.name || 'WildDuck IMAP Server',
-      version: config.imap.version || packageData.version,
-      vendor: config.imap.vendor || 'Kreata'
-    },
-
-    logger,
-
-    maxMessage: config.imap.maxMB * 1024 * 1024,
-    maxStorage: config.maxStorage * 1024 * 1024
-  };
-
-  certs.loadTLSOptions(serverOptions, 'imap');
-
-  const server = new IMAPServer(serverOptions);
-
-  certs.registerReload(server, 'imap');
-
-  let started = false;
-  server.on('error', err => {
-    if (!started) {
-      started = true;
-      return callback(err);
-    }
-
-    logger.error(
-      {
-        err
+      id: {
+        name: config.imap.name || 'WildDuck IMAP Server',
+        version: config.imap.version || packageData.version,
+        vendor: config.imap.vendor || 'Kreata'
       },
-      '%s',
-      err.message
-    );
-  });
 
-  server.indexer = indexer;
-  server.notifier = notifier;
-  server.domain = app.web.project.config.domain.production;
+      logger,
 
-  // setup command handlers for the server instance
-  var locals = {
-    server: server,
-    counters: counters,
-    app: app,
-    userCache: userCache
-  };
-  server.onFetch = onFetch(locals);
-  server.onAuth = onAuth(locals);
-  server.onList = onList(locals);
-  server.onLsub = onLsub(locals);
-  server.onSubscribe = onSubscribe(locals);
-  server.onUnsubscribe = onUnsubscribe(locals);
-  server.onCreate = onCreate(locals);
-  server.onRename = onRename(locals);
-  server.onDelete = onDelete(locals);
-  server.onOpen = onOpen(locals);
-  server.onStatus = onStatus(locals);
-  server.onAppend = onAppend(locals);
-  server.onStore = onStore(locals);
-  server.onExpunge = onExpunge(locals);
-  server.onCopy = onCopy(locals);
-  server.onMove = onMove(locals);
-  server.onSearch = onSearch(locals);
-  server.onGetQuotaRoot = onGetQuotaRoot(locals);
-  server.onGetQuota = onGetQuota(locals);
+      maxMessage: config.imap.maxMB * 1024 * 1024,
+      maxStorage: config.maxStorage * 1024 * 1024
+    };
 
-  // start listening
-  server.listen(ifaceOptions.port, ifaceOptions.host, () => {
-    if (started) {
-      return server.close();
-    }
-    started = true;
-    callback(null, server);
+    certs.loadTLSOptions(serverOptions, 'imap');
+
+    const server = new IMAPServer(serverOptions);
+
+    certs.registerReload(server, 'imap');
+
+    let started = false;
+    server.on('error', err => {
+      if (!started) {
+        started = true;
+        return reject(err);
+      }
+
+      logger.error(
+        {
+          err
+        },
+        '%s',
+        err.message
+      );
+    });
+
+    server.indexer = indexer;
+    server.notifier = notifier;
+    server.domain = app.web.project.config.domain.production;
+
+    // setup command handlers for the server instance
+    var locals = {
+      server: server,
+      counters: counters,
+      app: app,
+      userCache: userCache
+    };
+    server.onFetch = onFetch(locals);
+    server.onAuth = onAuth(locals);
+    server.onList = onList(locals);
+    server.onLsub = onLsub(locals);
+    server.onSubscribe = onSubscribe(locals);
+    server.onUnsubscribe = onUnsubscribe(locals);
+    server.onCreate = onCreate(locals);
+    server.onRename = onRename(locals);
+    server.onDelete = onDelete(locals);
+    server.onOpen = onOpen(locals);
+    server.onStatus = onStatus(locals);
+    server.onAppend = onAppend(locals);
+    server.onStore = onStore(locals);
+    server.onExpunge = onExpunge(locals);
+    server.onCopy = onCopy(locals);
+    server.onMove = onMove(locals);
+    server.onSearch = onSearch(locals);
+    server.onGetQuotaRoot = onGetQuotaRoot(locals);
+    server.onGetQuota = onGetQuota(locals);
+
+    // start listening
+    server.listen(ifaceOptions.port, ifaceOptions.host, () => {
+      if (started) {
+        return server.close();
+      }
+      started = true;
+      resolve(server);
+    });
   });
 };
 
-module.exports = (_app, done) => {
+module.exports = function(_app) {
   app = _app;
 
-  if (!config.imap.enabled) {
-    return setImmediate(() => done(null, false));
-  }
+  return Promise.resolve().then(function() {
+    if (!config.imap.enabled) {
+      return false;
+    }
 
-  var options = {
-    redis: app.redis,
-    app: app
-  };
-  counters = Counters(options.redis.publisher);
-  counters.ttlcounterAsync = function() {
-    var args = Array.prototype.slice.call(arguments);
-    return new Promise(function(resolve, reject) {
-      args = [].concat(args);
-      args.push(function(err, result) {
-        if (err) {
-          return reject(err);
-        }
-        resolve(result);
+    var options = {
+      redis: app.redis,
+      app: app
+    };
+    counters = Counters(options.redis.publisher);
+    counters.ttlcounterAsync = function() {
+      var args = Array.prototype.slice.call(arguments);
+      return new Promise(function(resolve, reject) {
+        args = [].concat(args);
+        args.push(function(err, result) {
+          if (err) {
+            return reject(err);
+          }
+          resolve(result);
+        });
+        counters.ttlcounter.apply(counters, args);
       });
-      counters.ttlcounter.apply(counters, args);
-    });
-  };
-  certs = Certs(app);
-  indexer = new Indexer(options);
-  notifier = new ImapNotifier(options);
-  userCache = UserCache(options);
+    };
+    certs = Certs(app);
+    indexer = new Indexer(options);
+    notifier = new ImapNotifier(options);
+    userCache = UserCache(options);
 
-  let ifaceOptions = [
-    {
-      enabled: true,
-      secure: config.imap.secure,
-      disableSTARTTLS: config.imap.disableSTARTTLS,
-      ignoreSTARTTLS: config.imap.ignoreSTARTTLS,
-      host: config.imap.host,
-      port: config.imap.port
-    }
-  ]
-    .concat(config.imap.interface || [])
-    .filter(iface => iface.enabled);
-
-  let iPos = 0;
-  let startInterfaces = () => {
-    if (iPos >= ifaceOptions.length) {
-      return done();
-    }
-    let opts = ifaceOptions[iPos++];
-
-    createInterface(opts, err => {
-      if (err) {
-        logger.error(
-          {
-            err,
-            tnx: 'bind'
-          },
-          'Failed starting %sIMAP interface %s:%s. %s',
-          opts.secure ? 'secure ' : '',
-          opts.host,
-          opts.port,
-          err.message
-        );
-        return done(err);
+    let ifaceOptions = [
+      {
+        enabled: true,
+        secure: config.imap.secure,
+        disableSTARTTLS: config.imap.disableSTARTTLS,
+        ignoreSTARTTLS: config.imap.ignoreSTARTTLS,
+        host: config.imap.host,
+        port: config.imap.port
       }
-      setImmediate(startInterfaces);
-    });
-  };
-  setImmediate(startInterfaces);
+    ]
+      .concat(config.imap.interface || [])
+      .filter(iface => iface.enabled);
+
+    let iPos = 0;
+    let startInterfaces = () => {
+      if (iPos >= ifaceOptions.length) {
+        return;
+      }
+      let opts = ifaceOptions[iPos++];
+
+      return createInterface(opts)
+        .catch(function(err) {
+          logger.error(
+            {
+              err,
+              tnx: 'bind'
+            },
+            'Failed starting %sIMAP interface %s:%s. %s',
+            opts.secure ? 'secure ' : '',
+            opts.host,
+            opts.port,
+            err.message
+          );
+          return Promise.reject(err);
+        })
+        .then(function() {
+          return startInterfaces();
+        });
+    };
+    return startInterfaces();
+  });
 };

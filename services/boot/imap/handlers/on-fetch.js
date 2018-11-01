@@ -248,9 +248,9 @@ module.exports = function(locals) {
                                 );
                               })
                               .then(function() {
-                                return locals.server.notifier.fire(
-                                  session.user.id
-                                );
+                                return locals.server.notifier.fire({
+                                  mailAccount: mailboxData.mailAccountId
+                                });
                               })
                               .then(resolve)
                               .catch(reject);
